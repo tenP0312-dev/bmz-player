@@ -252,6 +252,9 @@ impl CsvBuilder<'_> {
             self.warn(format!("lr2 folder distribution needs at least {cells} source cells"));
             return;
         }
+        // A skin has one folder distribution graph: a later SRC_BAR_GRAPH replaces the earlier
+        // one (its bar-part destinations are dropped by the caller).
+        self.graphs.retain(|graph| graph["lr2Distribution"] != true);
         let id = self.alloc_id("lr2-folder-graph");
         self.graphs.push(json!({
             "id":id,"src":region.src,"x":region.x,"y":region.y,"w":region.w,"h":region.h,

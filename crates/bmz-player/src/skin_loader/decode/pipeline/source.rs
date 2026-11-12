@@ -73,6 +73,7 @@ fn collect_source_tasks(
                     source_id: source.id.clone(),
                     path,
                     color_key: source.lr2_color_key,
+                    corner_color_key: source.corner_color_key,
                 })
             } else if is_skin_video_source_extension(&extension) {
                 Some(SourceDecodeTask::Video { index, source_id: source.id.clone(), path })
@@ -113,16 +114,19 @@ fn decode_source_task(
                 texture_status: None,
             })
         }
-        SourceDecodeTask::File { index, source_id, path, color_key } => decode_file_source(
-            index,
-            source_id,
-            path,
-            color_key,
-            required_sources,
-            warn_missing_required,
-            source_cache,
-            texture_cache,
-        ),
+        SourceDecodeTask::File { index, source_id, path, color_key, corner_color_key } => {
+            decode_file_source(
+                index,
+                source_id,
+                path,
+                color_key,
+                corner_color_key,
+                required_sources,
+                warn_missing_required,
+                source_cache,
+                texture_cache,
+            )
+        }
         SourceDecodeTask::Video { index, source_id, path } => {
             decode_video_source(index, source_id, path, source_cache, texture_cache)
         }
@@ -134,6 +138,7 @@ fn decode_file_source(
     source_id: String,
     path: PathBuf,
     color_key: Option<[u8; 3]>,
+    corner_color_key: bool,
     required_sources: &HashSet<String>,
     warn_missing_required: bool,
     source_cache: Option<&SharedSkinSourceAssetCache>,
@@ -146,6 +151,7 @@ fn decode_file_source(
     );
     let key = skin_source_asset_cache_key(&path, false).map(|mut key| {
         key.color_key = color_key;
+        key.corner_color_key = corner_color_key;
         key
     });
     let (cached_texture, cache_key, texture_status) =
@@ -161,7 +167,8 @@ fn decode_file_source(
             texture_status,
         ));
     }
-    match load_skin_file_source(&path, color_key, cache_key.clone(), source_cache) {
+    match load_skin_file_source(&path, color_key, corner_color_key, cache_key.clone(), source_cache)
+    {
         Ok(LoadedSkinFileSource::Still(asset, source_status)) => Some(asset_source_result(
             index,
             source_id,
@@ -266,12 +273,18 @@ enum LoadedSkinFileSource {
 fn load_skin_file_source(
     path: &Path,
     color_key: Option<[u8; 3]>,
+    corner_color_key: bool,
     cache_key: Option<SkinSourceAssetCacheKey>,
     source_cache: Option<&SharedSkinSourceAssetCache>,
 ) -> Result<LoadedSkinFileSource> {
     if !bmz_render::assets::may_animate(path) {
         return load_source_asset_with_cache_key(cache_key, source_cache, || {
-            bmz_render::assets::load_static_rgba_image_with_color_key(path, color_key)
+            let mut asset =
+                bmz_render::assets::load_static_rgba_image_with_color_key(path, color_key)?;
+            if corner_color_key {
+                bmz_render::assets::apply_corner_color_key(&mut asset);
+            }
+            Ok(asset)
         })
         .map(|(asset, status)| LoadedSkinFileSource::Still(asset, status));
     }
@@ -285,7 +298,10 @@ fn load_skin_file_source(
         bmz_render::assets::DecodedImage::Animated(animation) => {
             Ok(LoadedSkinFileSource::Animated(animation))
         }
-        bmz_render::assets::DecodedImage::Static(asset) => {
+        bmz_render::assets::DecodedImage::Static(mut asset) => {
+            if corner_color_key {
+                bmz_render::assets::apply_corner_color_key(&mut asset);
+            }
             let status = match (source_cache, cache_key) {
                 (None, _) => SourceCacheStatus::Disabled,
                 (Some(_), None) => SourceCacheStatus::Uncacheable,

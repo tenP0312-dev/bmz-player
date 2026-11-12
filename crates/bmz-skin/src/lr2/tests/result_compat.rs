@@ -57,6 +57,7 @@ fn continued_assets_keep_slots_paths_color_keys_and_font_definitions() {
                 id: "0".into(),
                 path: "C:/previous/frame.png".into(),
                 lr2_color_key: Some([1, 2, 3]),
+                corner_color_key: false,
             },
         )]),
         fonts: BTreeMap::from([(

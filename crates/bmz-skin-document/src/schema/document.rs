@@ -347,6 +347,10 @@ pub struct SkinOffsetDef {
 pub struct SkinSourceDef {
     #[serde(default, rename = "lr2ColorKey")]
     pub lr2_color_key: Option<[u8; 3]>,
+    /// BMZ: make every pixel equal to the bottom-right pixel (color and alpha) transparent.
+    /// Used by popn character images (`.chp` `#CharBMP` / `#CharTex` / `#CharFace`).
+    #[serde(default, rename = "cornerColorKey")]
+    pub corner_color_key: bool,
     #[serde(default, deserialize_with = "deserialize_skin_id")]
     pub id: String,
     #[serde(default)]

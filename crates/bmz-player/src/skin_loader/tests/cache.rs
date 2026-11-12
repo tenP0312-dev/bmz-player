@@ -14,6 +14,7 @@ fn lr2_continue_source_changes_invalidate_document_cache() {
             id: "0".into(),
             path: root.join(name).to_string_lossy().into_owned(),
             lr2_color_key: Some(key),
+            corner_color_key: false,
         };
         let state = LuaLoadRuntimeState {
             lr2_continue_assets: bmz_skin::Lr2ContinueAssets {
@@ -1330,6 +1331,7 @@ fn skin_gpu_cache_evicts_lru_but_pins_active_and_pending_textures() {
     let keys: Vec<_> = (0..3)
         .map(|i| SkinSourceAssetCacheKey {
             color_key: None,
+            corner_color_key: false,
             path: PathBuf::from(format!("image-{i}.png")),
             modified: None,
             len: 4,

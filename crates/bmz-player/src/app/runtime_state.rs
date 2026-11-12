@@ -114,6 +114,8 @@ pub(super) struct PlayRuntimeState {
     /// and `WinitApp` must stay below the stack-size bound.
     pub(super) pending_decide: Option<Box<DecideTransition>>,
     pub(super) pending_play_start: Option<PendingPlayStart>,
+    /// The BMS-IR Arena song being started or played (rule and note policy override).
+    pub(super) arena_play: Option<super::arena_flow::ArenaPlayLaunch>,
     pub(super) pending_play_preload: Option<PendingPlayPreload>,
     /// 中間リザルト表示中に開始した次コース譜面の先読み要求。
     pub(super) pending_course_stage_launch: Option<PendingCourseStageLaunch>,
@@ -296,6 +298,8 @@ pub(super) struct IntegrationRuntimeState {
     pub(super) applied_arena: Option<ArenaApplied>,
     /// Last select-cursor chart and chart check handed to Arena (to send each once).
     pub(super) arena_selected_md5: Option<String>,
+    /// Last `play_option` handed to Arena for the option phase.
+    pub(super) arena_option_choice: Option<u32>,
     pub(super) arena_answered_check: Option<crate::arena::session::ChartCheckRequest>,
     pub(super) exit_configs_saved: bool,
     /// Sparkle の再起動継続前と通常の `exiting` から共有する終了準備の冪等ガード。

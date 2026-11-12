@@ -82,7 +82,7 @@ B1 に入らないもの（後の段階）:
 ## 段階 B2-1: ルームと推薦
 
 B2 のうち、ルームの作成・入室、準備 OK、推薦、`chart` と `chart_check` までを入れました。
-曲の読み込み・`option_ready`・`prepare`・`play_ready`・`start_at` までの待機は B2-2（別の PR）です。
+曲の読み込み・`option_ready`・`prepare`・`play_ready`・`start_at` までの待機は、次の「段階 B2-2」にまとめています。
 
 ### 画面
 
@@ -152,3 +152,59 @@ B2-1 は `select` のみ実装済みです。`result` の側は、IR 送信の�
 「通常のプレイ中なら終わるまで待つ」（`finish_current_song`）扱いにして選曲に戻った時点で再び `ready` を許す案です。
 これらの区別の実装には、`AppSceneKind` が Play のまま練習・AUTOPLAY・リプレイ・コースを含むため、
 play の種類を app 側から取り出す入口（`app/play_flow`）が要ります。
+
+## 段階 B2-2: オプションの確定と読み込み・開始
+
+B2 の残りです。`option_select` から `start_at` まで、自分で曲を始めて READY で待つところまでを入れました。
+`live` / `final` / `forfeit` の送信、ESC 等をふさぐ処理、結果の表示、再接続後にルームへ戻る処理は B3 です。
+
+### 流れ
+
+| サーバー | BMZ の動き |
+|---|---|
+| `option_select` | パネルに「READY（今のオプションで送る）」を出す。選曲画面のオプション（1P / 2P の配置、FLIP）を `play_option` にして、変わるたびに保っておく |
+| （READY を押す、または締め切りの 0.25 秒前） | `option_ready`（`play_option`、`play_mode`、`ln_mode`）。1 試合に 1 回 |
+| `prepare` | 確定した `play_option` と `random_seed` で、自分で曲を始める（下記）。始められないときは `forfeit` |
+| （読み込み完了） | `play_ready`（`totalnotes` は読み込んだセッションの採点対象ノーツ数）。READY の演出を待たずに送る |
+| `start` | READY の最後で止まり、サーバー時刻が `start_at` に着いたフレームで音声の時計を始める |
+
+`play_option` は `1P + 10 × 2P + 100 × FLIP`（`options.rs`）。H-RANDOM、ALL-SCR、RANDOM-EX、S-RANDOM-EX、F-RANDOM、MF-RANDOM は NORMAL、
+BATTLE と BATTLE AS は Off として送ります。SP（7KEY）は 1 の位だけです。
+
+### 曲を始める入口（`app/arena_flow.rs`）
+
+`prepare` を受けたフレームで、選曲または結果画面なら `start_chart_with_options` を呼びます。
+リトライ・直接起動と同じ入口なので、プレロード、READY の演出、音声の開始、`gameplay` スレッドへの引き渡しは変えていません。
+決定画面は通りません。
+
+Arena の 1 曲で当てはめるものは、次の 2 か所だけに置きます。選曲画面のオプションやプロファイルは書き換えないので、
+終わったときに戻す処理はありません（`arena_play` を捨てるだけです）。
+
+1. **`PlayStartOptions`**（`arena/options.rs` の `apply_arena_overrides`）：NORMAL セッション、AUTOPLAY・リプレイ・G-BATTLE なし、
+   アシスト・キー数変換・Random Trainer・LN の変更なし、配置と FLIP は `play_option`、RANDOM の側の seed はサーバーの `random_seed`。
+   ゲージ、HS、レーンカバー、表示は利用者の設定のままです。
+2. **ルールと LN の方針**（`WinitApp::effective_ln_policy_and_rule`）：これまでコースだけが上書きしていた
+   `(ln_policy_setting, rule_mode)` の 4 か所の重複を 1 つの関数にまとめ、コース → Arena → プロファイルの順にしました。
+   Arena は `ruleset_profile` から `Lr2Oraja` / `Beatoraja`、LN は `ForceLn` です。スコアの identity はこの値から作られます。
+
+`maybe_start_ready_phase`（`play_loop_flow.rs`）に 2 つの入口を足しています。
+
+- 関数の先頭で `arena_report_loaded`：読み込みが終わったら `play_ready` を 1 回報告する（サーバーの `start_at` は最後の `play_ready` の 5 秒後なので、READY の演出の後ではなく先に送る）。
+- 音声の開始（`running.start`）の直前で `arena_start_gate`：Arena の曲なら、`start` が来て、サーバー時刻（時計合わせの差を足した現在時刻）が `start_at` に着くまで待つ。
+  待っている間は `practice_chart_zero_time` を消費しません。
+
+そのほか、`match_reserved` から試合の終わりまでは、通常の曲の開始（決定画面へ進む入口 `begin_decide_for_chart`）をふさぎ、トーストを出します
+（`block_next_selection`）。
+
+### 限界と未確認
+
+- `start_at` の精度は 1 フレーム分です（待ちの判定を描画フレームごとに行うため）。実測は B4 で行います。
+- `start_at` に合わせるのは「音声の時計を始める瞬間」です（`chart_zero_time` は今までどおりスキンの `playstart` の分だけ負）。
+  曲の 0 秒を `start_at` に揃えるか（スキンの `playstart` が人によって違うとき、0 秒がずれる）は、仕様書も「合わせます」としか書いておらず、
+  サーバー側の期待も確認できていないため、未決定です。
+- `play_ready.totalnotes` は BMZ の採点対象ノーツ数（LN の数え方を含む）です。サーバーの数え方（LN の 1 本を 1 とするか 2 とするか）と
+  一致するかは、実サーバーで確認していません。`chart_check` の `totalnotes` は、これまでどおりライブラリの値です。
+- CN / HCN の部屋（`ln_mode` が `LN` 以外）と、7KEY 以外の試合は始められず、`forfeit` します。
+- `prepare` の `rules.ruleset_profile` が無い・知らない値のときも始めません（推測で補いません）。
+- 試合の途中で ESC 等で抜ける操作は、READY 中のものだけ `forfeit` に結びつけています。プレイ中の ESC は B3 です。
+- 練習・AUTOPLAY・リプレイ・コースの `state` の区別と、`result` での `ready` は B3 です。

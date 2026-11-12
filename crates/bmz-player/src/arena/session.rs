@@ -10,8 +10,8 @@ use std::time::Duration;
 
 use super::protocol::{
     ChartAnnounced, ChartCheck, ClientMessage, Hello, NominationInfo, NominationsRevealed,
-    PlayerStatus, RoomEntry, RoomPlayer, RoomRules, RoomSettings, RoomStatusInfo, ScreenState,
-    ServerMessage,
+    OptionReady, OptionSelect, PlayReady, PlayerStatus, Prepare, RoomEntry, RoomPlayer, RoomRules,
+    RoomSettings, RoomStatusInfo, ScreenState, ServerMessage,
 };
 
 /// `ping` every 5 seconds.
@@ -125,7 +125,36 @@ pub enum MatchStage {
     Revealed,
     /// The chart is decided and the match is loading.
     ChartChosen,
+    /// Everyone has the chart; arrange options are being chosen.
+    Options,
+    /// `prepare` arrived: this player starts the chart and loads it.
+    Loading,
+    /// `start` arrived: the song begins at the server time `start_at`.
+    Countdown,
 }
+
+/// The option phase (`option_select`).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct OptionPhase {
+    /// Server time (UNIX seconds).
+    pub deadline: Option<f64>,
+    /// The server has this player's `option_ready`.
+    pub ready: bool,
+    pub ready_count: Option<u32>,
+    pub player_count: Option<u32>,
+    pub play_mode: Option<u32>,
+    pub ln_mode: String,
+}
+
+/// When to begin the song, in server time.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StartGate {
+    pub match_id: String,
+    pub start_at: f64,
+}
+
+/// Auto-send of `option_ready` this long before the deadline (spec 3.4 step 8).
+const OPTION_AUTO_SEND_LEAD: f64 = 0.25;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchView {
@@ -148,6 +177,12 @@ pub struct MatchView {
     pub required_count: Option<u32>,
     pub revealed: Option<NominationsRevealed>,
     pub chart: Option<ChartAnnounced>,
+    pub option: Option<OptionPhase>,
+    /// The confirmed option and seed for this player's own play.
+    pub prepare: Option<Prepare>,
+    /// This player's `play_ready` was sent.
+    pub play_ready_sent: bool,
+    pub start_at: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -195,6 +230,9 @@ pub struct ArenaPanelState {
     pub room: Option<RoomView>,
     pub current_match: Option<MatchView>,
     pub pending_chart_check: Option<ChartCheckRequest>,
+    /// `prepare` waiting for the app to start the chart ([`Event::PrepareTaken`]).
+    pub pending_prepare: Option<Prepare>,
+    pub start_gate: Option<StartGate>,
     pub match_end: Option<MatchEnd>,
     /// MD5 (lowercase hex) of the chart under the select cursor, if any.
     pub selected_chart_md5: Option<String>,
@@ -236,6 +274,25 @@ pub enum Event {
         play_mode: u32,
     },
     SetSelectedChart(Option<String>),
+    /// The `play_option` for the player's current options (kept up to date by
+    /// the app); sent at the deadline when the player does not press READY.
+    SetOptionChoice(u32),
+    /// The player pressed READY in the option phase.
+    OptionReadyNow,
+    /// The app started the chart for the pending `prepare`.
+    PrepareTaken {
+        match_id: String,
+    },
+    /// The chart is loaded and waits for READY (`totalnotes` as loaded).
+    PlayLoaded {
+        match_id: String,
+        md5: String,
+        totalnotes: u32,
+    },
+    /// The chart could not be started or loaded: leave the match.
+    LoadFailed {
+        match_id: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -276,6 +333,9 @@ pub struct ArenaSession {
     room: Option<RoomView>,
     current_match: Option<MatchView>,
     pending_chart_check: Option<ChartCheckRequest>,
+    pending_prepare: Option<Prepare>,
+    option_choice: Option<u32>,
+    option_sent: bool,
     match_end: Option<MatchEnd>,
     selected_chart_md5: Option<String>,
     last_disconnect: Option<DisconnectReason>,
@@ -308,6 +368,9 @@ impl ArenaSession {
             room: None,
             current_match: None,
             pending_chart_check: None,
+            pending_prepare: None,
+            option_choice: None,
+            option_sent: false,
             match_end: None,
             selected_chart_md5: None,
             last_disconnect: None,
@@ -334,6 +397,8 @@ impl ArenaSession {
     fn forget_match(&mut self) {
         self.current_match = None;
         self.pending_chart_check = None;
+        self.pending_prepare = None;
+        self.option_sent = false;
     }
 
     fn reset_ready(&mut self) {
@@ -372,6 +437,12 @@ impl ArenaSession {
             room: self.room.clone(),
             current_match: self.current_match.clone(),
             pending_chart_check: self.pending_chart_check.clone(),
+            pending_prepare: self.pending_prepare.clone(),
+            start_gate: self.current_match.as_ref().and_then(|current| {
+                current
+                    .start_at
+                    .map(|start_at| StartGate { match_id: current.match_id.clone(), start_at })
+            }),
             match_end: self.match_end.clone(),
             selected_chart_md5: self.selected_chart_md5.clone(),
             last_disconnect: self.last_disconnect,
@@ -469,6 +540,57 @@ impl ArenaSession {
             Event::SkipNomination => {
                 self.nomination(|match_id| ClientMessage::ChartNominationSkip { match_id })
             }
+            Event::SetOptionChoice(choice) => {
+                self.option_choice = Some(choice);
+                Vec::new()
+            }
+            Event::OptionReadyNow => {
+                self.send_option_ready().into_iter().map(Action::Send).collect()
+            }
+            Event::PrepareTaken { match_id } => {
+                if self.pending_prepare.as_ref().is_some_and(|p| p.match_id == match_id) {
+                    self.pending_prepare = None;
+                }
+                Vec::new()
+            }
+            Event::PlayLoaded { match_id, md5, totalnotes } => {
+                let md5 = md5.to_ascii_lowercase();
+                let Some(current) = self.current_match.as_mut() else {
+                    return Vec::new();
+                };
+                let Some(prepare) = current.prepare.as_ref() else {
+                    return Vec::new();
+                };
+                // One `play_ready` per match, for the chart `prepare` named. v8
+                // needs the loaded note count (> 0).
+                if self.phase != Phase::Connected
+                    || current.stage != MatchStage::Loading
+                    || current.play_ready_sent
+                    || current.match_id != match_id
+                    || prepare.md5 != md5
+                    || totalnotes == 0
+                {
+                    return Vec::new();
+                }
+                current.play_ready_sent = true;
+                vec![Action::Send(ClientMessage::PlayReady(PlayReady {
+                    match_id,
+                    chart_hash: md5,
+                    ln_mode: prepare.ln_mode.clone(),
+                    totalnotes,
+                }))]
+            }
+            Event::LoadFailed { match_id } => {
+                if self.phase != Phase::Connected
+                    || self
+                        .current_match
+                        .as_ref()
+                        .is_none_or(|current| current.match_id != match_id)
+                {
+                    return Vec::new();
+                }
+                vec![Action::Send(ClientMessage::Forfeit { match_id })]
+            }
             Event::ChartChecked { match_id, md5, available, totalnotes, play_mode } => {
                 // An answer for an older candidate (re-roll) or an ended match is dropped.
                 let current = ChartCheckRequest { match_id: match_id.clone(), md5: md5.clone() };
@@ -530,6 +652,48 @@ impl ArenaSession {
         self.current_match
             .as_mut()
             .filter(|current| match_id.is_empty() || current.match_id == match_id)
+    }
+
+    /// The option phase is open for this player and its auto-send time has come.
+    fn option_deadline_near(&self, now: Now) -> bool {
+        let (Some(current), Some(offset)) = (self.current_match.as_ref(), self.clock_offset) else {
+            return false;
+        };
+        let Some(option) = current.option.as_ref() else {
+            return false;
+        };
+        current.stage == MatchStage::Options
+            && !option.ready
+            && !self.option_sent
+            && option
+                .deadline
+                .is_some_and(|deadline| now.unix + offset >= deadline - OPTION_AUTO_SEND_LEAD)
+    }
+
+    /// `option_ready` for the choice the app last gave (NORMAL when it gave none),
+    /// once per match and only while the option phase is open.
+    fn send_option_ready(&mut self) -> Option<ClientMessage> {
+        if self.phase != Phase::Connected || self.option_sent {
+            return None;
+        }
+        let current = self.current_match.as_mut()?;
+        if current.stage != MatchStage::Options {
+            return None;
+        }
+        let option = current.option.as_mut().filter(|option| !option.ready)?;
+        self.option_sent = true;
+        option.ready = true;
+        Some(ClientMessage::OptionReady(OptionReady {
+            match_id: current.match_id.clone(),
+            play_option: self.option_choice.unwrap_or(0),
+            // The chart check answered with 7KEY, so that is the fallback.
+            play_mode: option.play_mode.unwrap_or(7),
+            ln_mode: if option.ln_mode.is_empty() {
+                "LN".to_owned()
+            } else {
+                option.ln_mode.clone()
+            },
+        }))
     }
 
     fn apply_room_status(&mut self, status: RoomStatusInfo) {
@@ -619,6 +783,10 @@ impl ArenaSession {
                     required_count: None,
                     revealed: None,
                     chart: None,
+                    option: None,
+                    prepare: None,
+                    play_ready_sent: false,
+                    start_at: None,
                 });
                 // The match fixes the "state" the server expects (spec 3.4 step 2).
                 self.sent_state = None;
@@ -677,6 +845,12 @@ impl ArenaSession {
                     return Vec::new();
                 }
                 current.stage = MatchStage::ChartChosen;
+                current.option = None;
+                current.prepare = None;
+                current.play_ready_sent = false;
+                current.start_at = None;
+                self.pending_prepare = None;
+                self.option_sent = false;
                 self.pending_chart_check = Some(ChartCheckRequest {
                     match_id: current.match_id.clone(),
                     md5: chart.md5.clone(),
@@ -684,10 +858,39 @@ impl ArenaSession {
                 current.chart = Some(chart);
                 Vec::new()
             }
-            ServerMessage::OptionSelect(_)
-            | ServerMessage::Prepare(_)
-            | ServerMessage::Start(_) => {
-                // Loading and starting come in the next stage (B2-2).
+            ServerMessage::OptionSelect(select) => {
+                let Some(current) = self.current_match_for(&select.match_id) else {
+                    return Vec::new();
+                };
+                // Late copies (after `prepare`) are ignored.
+                if matches!(current.stage, MatchStage::Loading | MatchStage::Countdown) {
+                    return Vec::new();
+                }
+                current.stage = MatchStage::Options;
+                current.deadline = select.deadline;
+                current.option = Some(option_phase(&select));
+                Vec::new()
+            }
+            ServerMessage::Prepare(prepare) => {
+                let Some(current) = self.current_match_for(&prepare.match_id) else {
+                    return Vec::new();
+                };
+                if current.stage == MatchStage::Countdown {
+                    return Vec::new();
+                }
+                current.stage = MatchStage::Loading;
+                current.deadline = prepare.load_deadline;
+                current.play_ready_sent = false;
+                current.prepare = Some(prepare.clone());
+                self.pending_prepare = Some(prepare);
+                Vec::new()
+            }
+            ServerMessage::Start(start) => {
+                let Some(current) = self.current_match_for(&start.match_id) else {
+                    return Vec::new();
+                };
+                current.stage = MatchStage::Countdown;
+                current.start_at = start.start_at;
                 Vec::new()
             }
             ServerMessage::MatchCancelled { reason } => {
@@ -724,10 +927,14 @@ impl ArenaSession {
                     self.begin_reconnect(now, DisconnectReason::IdleTimeout);
                     return vec![Action::Close];
                 }
-                if self.phase == Phase::Connected && now.mono >= self.next_ping {
-                    return vec![self.ping(now)];
+                let mut actions = Vec::new();
+                if self.phase == Phase::Connected && self.option_deadline_near(now) {
+                    actions.extend(self.send_option_ready().map(Action::Send));
                 }
-                Vec::new()
+                if self.phase == Phase::Connected && now.mono >= self.next_ping {
+                    actions.push(self.ping(now));
+                }
+                actions
             }
             _ => Vec::new(),
         }
@@ -794,6 +1001,17 @@ impl ArenaSession {
     }
 }
 
+fn option_phase(select: &OptionSelect) -> OptionPhase {
+    OptionPhase {
+        deadline: select.deadline,
+        ready: select.ready,
+        ready_count: select.ready_count,
+        player_count: select.player_count,
+        play_mode: select.play_mode,
+        ln_mode: select.ln_mode.clone(),
+    }
+}
+
 /// Copies a `nomination_started` / `nomination_status` payload into the view.
 /// "Nominated" comes from the server's own bookkeeping (this player's
 /// `submitted`, or the counts against the required count), so a restarted
@@ -819,3 +1037,7 @@ mod tests;
 #[cfg(test)]
 #[path = "match_setup_tests.rs"]
 mod match_setup_tests;
+
+#[cfg(test)]
+#[path = "load_start_tests.rs"]
+mod load_start_tests;

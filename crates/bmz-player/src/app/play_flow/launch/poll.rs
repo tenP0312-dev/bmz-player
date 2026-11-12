@@ -302,6 +302,7 @@ impl WinitApp {
 
     /// Cancel the unstarted chart without discarding completed course stages.
     pub(super) fn clear_pending_play_start(&mut self) {
+        self.arena_play_abandoned();
         if !self.commit_active_play_lane_state_to_profile() {
             self.commit_pending_play_lane_state_to_profile();
         }

@@ -14,6 +14,8 @@
 
 pub mod chart_lookup;
 pub mod connection;
+pub mod launch;
+pub mod options;
 pub mod protocol;
 pub mod session;
 

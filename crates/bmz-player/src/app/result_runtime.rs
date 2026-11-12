@@ -303,6 +303,7 @@ pub(super) fn debug_boot_finished_play_session() -> FinishedPlaySession {
         double_option: crate::select_options::DoubleOptionScoreBucket::Off,
         rule_mode: bmz_gameplay::rule::RuleMode::Beatoraja,
         assist: Default::default(),
+        floating_hispeed_used: false,
         score_data_changed: false,
     }
 }

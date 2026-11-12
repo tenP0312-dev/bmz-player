@@ -243,3 +243,7 @@ E1/E2操作に連動する共通HSパネルには、押下中option `1928`、共
 - プレイ中操作と再計算: `crates/bmz-player/src/app/play_support/`
 - 表示時間とSCROLL/SPEED: `crates/bmz-player/src/screens/play_snapshot/`
 - Skin refs: `crates/bmz-render/src/skin/`
+
+## IRへ送る印
+
+Playing中にFloatingが1度でも有効だったプレイは、IR送信の`play_options.floating_hispeed`が`true`になります。READY中とロード中だけの場合は`false`です。詳細は[IR](ir.md)を参照してください。

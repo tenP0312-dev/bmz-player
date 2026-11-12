@@ -397,6 +397,12 @@ pub(in crate::ui::profile_panel) fn build_profile_play_section(
                     }
                 });
             ui.checkbox(&mut profile.play.note_retention, tr!(text, "profile-play-note-retention"));
+            ui.checkbox(
+                &mut profile.play.ready_first_notes,
+                tr!(text, "profile-play-ready-first-notes"),
+            );
+            ui.checkbox(&mut profile.play.one_bass_input, tr!(text, "profile-play-one-bass-input"))
+                .on_hover_text(tr!(text, "profile-play-one-bass-input-help"));
             ui.checkbox(&mut profile.play.show_ln_tail_cap, tr!(text, "profile-play-ln-tail-cap"));
             ui.checkbox(&mut profile.play.guide_se, tr!(text, "profile-play-guide-se"));
             ui.checkbox(

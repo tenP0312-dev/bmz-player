@@ -6,6 +6,13 @@ impl WinitApp {
         chart_id: i64,
         options: &PlayStartOptions,
     ) {
+        self.respawn_play_skin_decode(chart_id, options);
+        self.request_scene_skin(SkinKind::Play);
+    }
+
+    /// Starts decoding the Play skin for this chart and options. It needs the current
+    /// preload, because the skin reads the chart state that preload publishes.
+    pub(super) fn respawn_play_skin_decode(&mut self, chart_id: i64, options: &PlayStartOptions) {
         let play_skin_key_mode = self.play_skin_key_mode_for_chart(chart_id, options);
         let skin_attempt = self.skin_attempt_for_chart(chart_id, options);
         let mut play_skin_runtime_state = lua_runtime_state_for_play(
@@ -28,7 +35,6 @@ impl WinitApp {
             options.session_mode,
             play_skin_runtime_state,
         );
-        self.request_scene_skin(SkinKind::Play);
     }
 
     /// 既に開始済みの preload を維持したまま Play シーンへ入場する。
@@ -342,6 +348,7 @@ impl WinitApp {
         let mut session_options =
             play_session_options_from_start(&self.play_session_app_config(), options.clone());
         session_options.play_config_key_mode = Some(play_config_key_mode);
+        session_options.ready_first_notes = self.boot.profile_config.play.ready_first_notes;
         // CLIの一時上書き中とコースのNoSpeed制約中は、profileの量を書き換えない。
         if self.boot.profile_config.cli_play.is_none()
             && session_options.speed_constraint != bmz_core::course::CourseSpeedConstraint::NoSpeed

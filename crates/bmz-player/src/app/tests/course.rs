@@ -20,6 +20,7 @@ fn course_decide_title_override_preserves_play_metadata_and_course_context() {
             title: "Course Title".to_string(),
             subtitle: String::new(),
         }),
+        one_bass_checked: false,
     };
 
     let decide_snapshot = transition.snapshot_for_render();
@@ -189,6 +190,7 @@ fn course_result_summary_for_skin_uses_aggregate_course_values() {
             entry_summary(200, 120, 90, 2_000),
         ],
         entry_arranges: Vec::new(),
+        floating_hispeed_used: false,
         total_ex_score: 320,
         max_ex_score: 800,
         // Failed course results keep the full course notes as the rank/rate

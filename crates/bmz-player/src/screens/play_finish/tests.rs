@@ -1426,6 +1426,7 @@ fn session() -> GameSession {
         },
         hispeed: 2.0,
         hispeed_mode: bmz_gameplay::session::HispeedMode::Classic,
+        floating_hispeed_used: false,
         base_hispeed_mode: bmz_gameplay::session::HispeedMode::Classic,
         floating_policy: bmz_gameplay::session::FloatingPolicy::Toggle,
         normal_hispeed_level: 18,

@@ -354,7 +354,8 @@ pub struct IrConfig {
     pub prefetch_rival_ranking_on_score_submit: bool,
 }
 
-pub const BUILTIN_IR_PROVIDER_COUNT: usize = 3;
+/// BMS-IR fork: the only provider slot. Other providers are not representable.
+pub const BUILTIN_IR_PROVIDER_COUNT: usize = 1;
 
 pub(super) fn default_true() -> bool {
     true
@@ -365,11 +366,7 @@ impl Default for IrConfig {
         Self {
             primary_provider: String::new(),
             credential_store: IrCredentialStoreConfig::default(),
-            providers: vec![
-                IrProviderConfig::bmz_ir(),
-                IrProviderConfig::rian_ir(),
-                IrProviderConfig::bms_ir(),
-            ],
+            providers: vec![IrProviderConfig::bms_ir()],
             prefetch_global_ranking_on_score_submit: true,
             prefetch_rival_ranking_on_score_submit: true,
         }
@@ -377,32 +374,30 @@ impl Default for IrConfig {
 }
 
 impl IrConfig {
-    /// 先頭3枠を公式 BMZ IR / rianIR / BMS-IR に固定し、既存のカスタム provider を後続へ保つ。
+    /// BMS-IR fork: keeps exactly one provider, BMS-IR, with its fixed endpoint.
+    /// BMZ IR, rianIR and custom providers found in an existing profile are dropped
+    /// from the in-memory config (and from the file on the next save). Their stored
+    /// credentials are left untouched on disk but are never read.
     pub fn normalize_builtin_providers(&mut self) -> bool {
         let previous = self.providers.clone();
+        let previous_primary = self.primary_provider.clone();
         let mut remaining = std::mem::take(&mut self.providers);
-
-        let mut bmz = take_matching_provider(&mut remaining, is_bmz_ir_builtin)
-            .unwrap_or_else(IrProviderConfig::bmz_ir);
-        bmz.provider = crate::ir::bmz_official::BMZ_IR_PROVIDER.to_string();
-        bmz.base_url = crate::ir::bmz_official::BMZ_IR_DEFAULT_BASE_URL.to_string();
-
-        let mut rian = take_matching_provider(&mut remaining, is_rian_ir_builtin)
-            .unwrap_or_else(IrProviderConfig::rian_ir);
-        rian.provider = crate::ir::rian_ir::RIAN_IR_PROVIDER.to_string();
-        rian.base_url = crate::ir::rian_ir::RIAN_IR_PUBLIC_BASE_URL.to_string();
 
         let mut bms_ir = take_matching_provider(&mut remaining, is_bms_ir_builtin)
             .unwrap_or_else(IrProviderConfig::bms_ir);
         bms_ir.provider = crate::ir::bms_ir::BMS_IR_PROVIDER.to_string();
         bms_ir.base_url = crate::ir::bms_ir::BMS_IR_DEFAULT_BASE_URL.to_string();
+        self.providers = vec![bms_ir];
 
-        self.providers = Vec::with_capacity(remaining.len() + BUILTIN_IR_PROVIDER_COUNT);
-        self.providers.push(bmz);
-        self.providers.push(rian);
-        self.providers.push(bms_ir);
-        self.providers.extend(remaining);
-        self.providers != previous
+        let primary = self.primary_provider.trim();
+        if !primary.is_empty() && !crate::ir::bms_ir::is_bms_ir_provider(primary) {
+            let keeps = crate::ir::provider_key::configured_provider_key(&self.providers[0])
+                .is_some_and(|key| key == primary);
+            if !keeps {
+                self.primary_provider.clear();
+            }
+        }
+        self.providers != previous || self.primary_provider != previous_primary
     }
 }
 
@@ -443,6 +438,7 @@ pub struct IrProviderConfig {
 }
 
 impl IrProviderConfig {
+    #[cfg(test)]
     pub fn bmz_ir() -> Self {
         Self::new(
             crate::ir::bmz_official::BMZ_IR_PROVIDER,
@@ -450,6 +446,7 @@ impl IrProviderConfig {
         )
     }
 
+    #[cfg(test)]
     pub fn rian_ir() -> Self {
         Self::new(crate::ir::rian_ir::RIAN_IR_PROVIDER, crate::ir::rian_ir::RIAN_IR_PUBLIC_BASE_URL)
     }
@@ -458,6 +455,7 @@ impl IrProviderConfig {
         Self::new(crate::ir::bms_ir::BMS_IR_PROVIDER, crate::ir::bms_ir::BMS_IR_DEFAULT_BASE_URL)
     }
 
+    #[cfg(test)]
     pub fn custom() -> Self {
         Self::new(crate::ir::bmz_official::BMZ_IR_PROVIDER, "")
     }
@@ -501,27 +499,10 @@ fn provider_migration_priority(provider: &IrProviderConfig) -> (bool, bool, i64)
     )
 }
 
-fn is_bmz_ir_builtin(provider: &IrProviderConfig) -> bool {
-    !crate::ir::rian_ir::is_rian_ir_config(provider)
-        && !crate::ir::bms_ir::is_bms_ir_config(provider)
-        && normalized_ir_base_url(&provider.base_url)
-            == normalized_ir_base_url(crate::ir::bmz_official::BMZ_IR_DEFAULT_BASE_URL)
-}
-
 fn is_bms_ir_builtin(provider: &IrProviderConfig) -> bool {
     crate::ir::bms_ir::is_bms_ir_config(provider)
         || normalized_ir_base_url(&provider.base_url)
             == normalized_ir_base_url(crate::ir::bms_ir::BMS_IR_DEFAULT_BASE_URL)
-}
-
-fn is_rian_ir_builtin(provider: &IrProviderConfig) -> bool {
-    crate::ir::rian_ir::is_rian_ir_config(provider)
-        && [
-            crate::ir::rian_ir::RIAN_IR_PUBLIC_BASE_URL,
-            crate::ir::rian_ir::RIAN_IR_DEFAULT_BASE_URL,
-        ]
-        .into_iter()
-        .any(|url| normalized_ir_base_url(&provider.base_url) == normalized_ir_base_url(url))
 }
 
 pub fn normalized_ir_base_url(url: &str) -> Option<String> {
@@ -582,6 +563,8 @@ impl ProfileConfig {
                 assist: AssistOptionConfig::default(),
                 guide_se: false,
                 note_retention: false,
+                ready_first_notes: false,
+                one_bass_input: false,
                 session_mode: Some(SessionMode::Normal),
                 auto_play: false,
                 bga: default_bga_mode(),

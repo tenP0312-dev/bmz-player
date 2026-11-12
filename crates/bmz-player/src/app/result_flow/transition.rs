@@ -152,7 +152,13 @@ impl WinitApp {
             return;
         }
 
-        if !decide.cancel && !self.decide_play_start_ready() {
+        let cancel = decide.cancel;
+        // Read the held keys once, now that the decide exit is over. A pinned bass changes
+        // the seed, so the load restarts and the Play skin is pending again until it ends.
+        if !cancel && self.apply_one_bass_at_decide_end() {
+            return;
+        }
+        if !cancel && !self.decide_play_start_ready() {
             return;
         }
 

@@ -244,6 +244,9 @@ pub struct GameSession {
     pub audio_mix: PlayAudioMix,
     pub hispeed: f32,
     pub hispeed_mode: HispeedMode,
+    /// Set once the session has been `Playing` with `HispeedMode::Floating` at least
+    /// once; never cleared. Sent to the IR as a display-only mark (`floating_hispeed`).
+    pub floating_hispeed_used: bool,
     pub base_hispeed_mode: HispeedMode,
     pub floating_policy: FloatingPolicy,
     pub normal_hispeed_level: u8,

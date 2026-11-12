@@ -65,6 +65,8 @@ impl SettingsEntryId {
         Self::PlayKeysoundOnMiss,
         Self::PlayExitHoldMs,
         Self::NoteRetention,
+        Self::ReadyFirstNotes,
+        Self::OneBassInput,
         Self::ShowLnTailCap,
         Self::GuideSe,
     ];
@@ -264,6 +266,8 @@ impl SettingsEntryId {
             Self::HideMisslayerOnGood => "MISSLAYER GOOD CLEAR",
             Self::PlayKeysoundOnMiss => "MISS KEYSOUND",
             Self::NoteRetention => "NOTE RETENTION",
+            Self::ReadyFirstNotes => "READY FIRST NOTES",
+            Self::OneBassInput => "ONE BASS",
             Self::ShowLnTailCap => "LN TAIL CAP",
             Self::GuideSe => "GUIDE SE",
             Self::Hispeed => "CLASSIC HS",
@@ -401,6 +405,8 @@ impl SettingsEntryId {
             Self::HideMisslayerOnGood => "settings-entry-description-hide-misslayer-on-good",
             Self::PlayKeysoundOnMiss => "settings-entry-description-play-keysound-on-miss",
             Self::NoteRetention => "settings-entry-description-note-retention",
+            Self::ReadyFirstNotes => "settings-entry-description-ready-first-notes",
+            Self::OneBassInput => "settings-entry-description-one-bass-input",
             Self::ShowLnTailCap => "settings-entry-description-show-ln-tail-cap",
             Self::GuideSe => "settings-entry-description-guide-se",
             Self::Hispeed => "settings-entry-description-hispeed",
@@ -877,6 +883,16 @@ mod tests {
         assert!(adjust_settings_value(&mut profile, SettingsEntryId::NoteRetention, 1));
         assert!(profile.play.note_retention);
         assert_eq!(format_settings_value(&profile, SettingsEntryId::NoteRetention), "ON");
+        assert!(!profile.play.ready_first_notes, "READY FIRST NOTES defaults to OFF");
+        assert_eq!(format_settings_value(&profile, SettingsEntryId::ReadyFirstNotes), "OFF");
+        assert!(adjust_settings_value(&mut profile, SettingsEntryId::ReadyFirstNotes, 1));
+        assert!(profile.play.ready_first_notes);
+        assert_eq!(format_settings_value(&profile, SettingsEntryId::ReadyFirstNotes), "ON");
+        assert!(!profile.play.one_bass_input, "ONE BASS defaults to OFF");
+        assert_eq!(format_settings_value(&profile, SettingsEntryId::OneBassInput), "OFF");
+        assert!(adjust_settings_value(&mut profile, SettingsEntryId::OneBassInput, 1));
+        assert!(profile.play.one_bass_input);
+        assert_eq!(format_settings_value(&profile, SettingsEntryId::OneBassInput), "ON");
 
         profile.play.misslayer_duration_ms = 4_980;
         assert!(adjust_settings_value(&mut profile, SettingsEntryId::MisslayerDurationMs, 50));

@@ -22,6 +22,8 @@ pub(super) struct ArenaPlayLaunch {
     pub(super) match_id: String,
     pub(super) md5: String,
     pub(super) rules: crate::arena::options::ArenaRules,
+    /// The room's `ln_mode`, which decides how `totalnotes` counts long notes.
+    pub(super) ln_mode: String,
     /// `play_ready` has been reported for this launch.
     pub(super) loaded_reported: bool,
     /// The audio clock started (the song is playing).
@@ -141,6 +143,7 @@ impl WinitApp {
             match_id,
             md5: prepare.md5.clone(),
             rules,
+            ln_mode: prepare.ln_mode.clone(),
             loaded_reported: false,
             started: false,
         });
@@ -184,7 +187,10 @@ impl WinitApp {
             .active_play
             .as_ref()
             .and_then(|play| play.running.gameplay.prepared_session())
-            .map(|session| session.scored_total_notes);
+            // LN counts once, CN / HCN twice (operator decision 2), from the loaded chart.
+            .and_then(|session| {
+                crate::arena::options::arena_total_notes(&session.chart, &arena_play.ln_mode)
+            });
         if !arena_play.loaded_reported
             && let Some(totalnotes) = totalnotes
         {
@@ -198,8 +204,9 @@ impl WinitApp {
     }
 
     /// Whether READY may end: always for a normal play, and for an Arena song
-    /// only once the server clock has reached `start_at`.
-    pub(super) fn arena_start_gate(&mut self) -> ArenaStartGate {
+    /// only once `play_ready` was sent and the chart's 0 (`start_at`) is
+    /// `playstart_lead_us` away, the skin's pre-roll after the clock starts.
+    pub(super) fn arena_start_gate(&mut self, playstart_lead_us: i64) -> ArenaStartGate {
         let Some(arena_play) = self.play.arena_play.as_mut() else {
             return ArenaStartGate::Go;
         };
@@ -211,10 +218,12 @@ impl WinitApp {
             .map_or(0.0, |elapsed| elapsed.as_secs_f64());
         match gate {
             Some(gate)
-                if crate::arena::launch::start_reached(
+                if crate::arena::launch::may_leave_ready(
                     gate.start_at,
+                    playstart_lead_us,
                     panel.clock_offset_secs,
                     local_unix,
+                    arena_play.loaded_reported,
                 ) =>
             {
                 arena_play.started = true;

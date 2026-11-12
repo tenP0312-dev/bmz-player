@@ -91,6 +91,27 @@ pub fn ln_policy_for_ln_mode(ln_mode: &str) -> Option<LnPolicySetting> {
     (ln_mode == "LN").then_some(LnPolicySetting::ForceLn)
 }
 
+/// The policy that decides how many notes a room's `ln_mode` counts (operator
+/// decision 2): LN counts a long note once, CN and HCN count start and end (2).
+/// Unlike [`ln_policy_for_ln_mode`] this also knows CN and HCN, which are only
+/// counted here (such rooms are still not played).
+pub fn counting_policy_for_ln_mode(ln_mode: &str) -> Option<LnPolicySetting> {
+    match ln_mode {
+        "LN" => Some(LnPolicySetting::ForceLn),
+        "CN" => Some(LnPolicySetting::ForceCn),
+        "HCN" => Some(LnPolicySetting::ForceHcn),
+        _ => None,
+    }
+}
+
+/// `totalnotes` for `play_ready` and `chart_check`: the chart's score-target
+/// note count in the room's LN mode (`BMSModel.getTotalNotes()` of the server's
+/// reference client).
+pub fn arena_total_notes(chart: &bmz_chart::model::PlayableChart, ln_mode: &str) -> Option<u32> {
+    counting_policy_for_ln_mode(ln_mode)
+        .map(|policy| crate::ln_policy::expected_scored_note_count(chart, policy))
+}
+
 /// What the Arena song replaces for the one launch: rule and long-note policy
 /// (used in place of the profile's wherever the score identity is built).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -212,6 +233,9 @@ mod tests {
         assert_eq!(ln_policy_for_ln_mode("LN"), Some(LnPolicySetting::ForceLn));
         assert_eq!(ln_policy_for_ln_mode("CN"), None);
         assert_eq!(ln_policy_for_ln_mode("HCN"), None);
+        assert_eq!(counting_policy_for_ln_mode("CN"), Some(LnPolicySetting::ForceCn));
+        assert_eq!(counting_policy_for_ln_mode("HCN"), Some(LnPolicySetting::ForceHcn));
+        assert_eq!(counting_policy_for_ln_mode("x"), None);
     }
 
     #[test]

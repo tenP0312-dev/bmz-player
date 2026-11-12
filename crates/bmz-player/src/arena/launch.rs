@@ -30,11 +30,31 @@ pub fn rules_for_prepare(prepare: &Prepare) -> Result<ArenaRules, LaunchRefusal>
     Ok(ArenaRules { rule_mode: rule_mode_for_ruleset(ruleset), ln_policy })
 }
 
-/// `true` once the server clock (local UNIX time plus the synchronised offset)
-/// reaches `start_at`. Without a clock offset nothing is started: the song
-/// would begin at an unknown moment.
-pub fn start_reached(start_at: f64, clock_offset_secs: Option<f64>, local_unix: f64) -> bool {
-    clock_offset_secs.is_some_and(|offset| local_unix + offset >= start_at)
+/// Whether READY may give way to the song (operator decision 1).
+///
+/// The song's second 0 is `start_at`, as in Arena oraja where PLAY begins at
+/// `start_at` and READY (`playstart`) is before it. BMZ starts its audio clock
+/// `playstart_lead_us` before the chart's 0 (the skin's `playstart` pre-roll),
+/// so the clock starts `playstart_lead_us` before `start_at`. All of these
+/// must hold:
+///
+/// * `play_ready` has been sent (`loaded_reported`);
+/// * the READY presentation is over (the caller only asks after it);
+/// * the server clock (local UNIX time plus the synchronised offset) has
+///   reached `start_at − playstart_lead_us`.
+///
+/// Without a clock offset nothing is started: the song would begin at an
+/// unknown moment.
+pub fn may_leave_ready(
+    start_at: f64,
+    playstart_lead_us: i64,
+    clock_offset_secs: Option<f64>,
+    local_unix: f64,
+    loaded_reported: bool,
+) -> bool {
+    let lead_secs = playstart_lead_us.max(0) as f64 / 1_000_000.0;
+    loaded_reported
+        && clock_offset_secs.is_some_and(|offset| local_unix + offset >= start_at - lead_secs)
 }
 
 #[cfg(test)]
@@ -85,12 +105,25 @@ mod tests {
     }
 
     #[test]
-    fn the_song_starts_when_server_time_reaches_start_at() {
-        // Server clock is 2 s ahead of the local one.
-        assert!(!start_reached(1_010.0, Some(2.0), 1_007.9));
-        assert!(start_reached(1_010.0, Some(2.0), 1_008.0));
-        assert!(start_reached(1_010.0, Some(-1.0), 1_011.5));
+    fn chart_zero_is_start_at_so_the_clock_starts_playstart_earlier() {
+        // Server clock is 2 s ahead of the local one; playstart pre-roll is 1.5 s.
+        let lead = 1_500_000;
+        // Chart 0 = start_at 1010 -> the clock may start at 1008.5 server time (1006.5 local).
+        assert!(!may_leave_ready(1_010.0, lead, Some(2.0), 1_006.4, true));
+        assert!(may_leave_ready(1_010.0, lead, Some(2.0), 1_006.5, true));
+        // No pre-roll: the clock starts exactly at start_at.
+        assert!(!may_leave_ready(1_010.0, 0, Some(2.0), 1_007.9, true));
+        assert!(may_leave_ready(1_010.0, 0, Some(2.0), 1_008.0, true));
+        assert!(may_leave_ready(1_010.0, 0, Some(-1.0), 1_011.5, true));
+    }
+
+    #[test]
+    fn ready_is_held_until_play_ready_was_sent_and_the_clock_is_known() {
+        // The time has come but `play_ready` has not been sent: stay in READY.
+        assert!(!may_leave_ready(1_010.0, 0, Some(0.0), 9_999.0, false));
         // No synchronised clock: never start.
-        assert!(!start_reached(1_010.0, None, 9_999.0));
+        assert!(!may_leave_ready(1_010.0, 0, None, 9_999.0, true));
+        // A negative lead (no skin pre-roll) is treated as none.
+        assert!(!may_leave_ready(1_010.0, -5, Some(0.0), 1_009.9, true));
     }
 }

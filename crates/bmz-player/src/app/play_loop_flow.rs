@@ -431,8 +431,11 @@ impl WinitApp {
         }) {
             return;
         }
-        // An Arena song stays in READY until the server clock reaches `start_at`.
-        if self.arena_start_gate() == super::arena_flow::ArenaStartGate::Hold {
+        // An Arena song stays in READY until `play_ready` was sent and the server
+        // clock puts the chart's 0 at `start_at` (the clock starts one skin
+        // `playstart` earlier).
+        let playstart_lead_us = (-self.play_skin_playstart_offset().0).max(0);
+        if self.arena_start_gate(playstart_lead_us) == super::arena_flow::ArenaStartGate::Hold {
             self.update_pending_play_snapshot_timers();
             return;
         }

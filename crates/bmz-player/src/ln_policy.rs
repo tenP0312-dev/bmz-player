@@ -919,6 +919,25 @@ mod tests {
         assert!(chart.long_notes.iter().all(|pair| pair.mode == Some(LongNoteMode::Hcn)));
     }
 
+    #[test]
+    fn arena_counts_ln_once_and_cn_hcn_twice() {
+        use crate::arena::options::arena_total_notes;
+        // Two LN, one CN, one HCN pair on top of the base count (Tap + LongStart).
+        let chart = chart_with_long_modes(&[
+            Some(LongNoteMode::Ln),
+            None,
+            Some(LongNoteMode::Cn),
+            Some(LongNoteMode::Hcn),
+        ]);
+        let base = chart.total_notes;
+        // LN room: every long note is one note, whatever the chart defines.
+        assert_eq!(arena_total_notes(&chart, "LN"), Some(base));
+        // CN / HCN room: start and end both count (4 pairs, +4).
+        assert_eq!(arena_total_notes(&chart, "CN"), Some(base + 4));
+        assert_eq!(arena_total_notes(&chart, "HCN"), Some(base + 4));
+        assert_eq!(arena_total_notes(&chart, "ln"), None);
+    }
+
     fn chart_with_long_modes(modes: &[Option<LongNoteMode>]) -> PlayableChart {
         PlayableChart {
             identity: ChartIdentity { file_md5: [0; 16], file_sha256: [0; 32] },

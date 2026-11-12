@@ -199,11 +199,13 @@ Arena の 1 曲で当てはめるものは、次の 2 か所だけに置きま�
 ### 限界と未確認
 
 - `start_at` の精度は 1 フレーム分です（待ちの判定を描画フレームごとに行うため）。実測は B4 で行います。
-- `start_at` に合わせるのは「音声の時計を始める瞬間」です（`chart_zero_time` は今までどおりスキンの `playstart` の分だけ負）。
-  曲の 0 秒を `start_at` に揃えるか（スキンの `playstart` が人によって違うとき、0 秒がずれる）は、仕様書も「合わせます」としか書いておらず、
-  サーバー側の期待も確認できていないため、未決定です。
-- `play_ready.totalnotes` は BMZ の採点対象ノーツ数（LN の数え方を含む）です。サーバーの数え方（LN の 1 本を 1 とするか 2 とするか）と
-  一致するかは、実サーバーで確認していません。`chart_check` の `totalnotes` は、これまでどおりライブラリの値です。
+- `start_at` に合わせるのは**曲の 0 秒**です（オペレーター決定 1、Arena oraja と同じ）。BMZ はスキンの `playstart` の分だけ
+  曲の 0 秒より前に音声の時計を始めるので、READY を抜ける条件は次の3つがそろったときです：
+  READY の演出が終わっている、`play_ready` を送信済み、サーバー時計 ≥ `start_at − playstart`（`arena::launch::may_leave_ready`）。
+  READY の演出が `start_at` に間に合わなかったときは、終わった時点で始めます（その分、0 秒が遅れる）。
+- `play_ready.totalnotes` は、読み込んだ譜面をその部屋の `ln_mode` で数えた値です（オペレーター決定 2）。LN の部屋は LN 1 本を 1、
+  CN / HCN の部屋は始点と終点で 2 と数えます（`arena::options::arena_total_notes`）。`chart_check` の `totalnotes` はライブラリの値
+  （LN 1 本 = 1）で、サーバーが照合するのは LN の部屋だけなので、そのままにしています。
 - CN / HCN の部屋（`ln_mode` が `LN` 以外）と、7KEY 以外の試合は始められず、`forfeit` します。
 - `prepare` の `rules.ruleset_profile` が無い・知らない値のときも始めません（推測で補いません）。
 - 試合の途中で ESC 等で抜ける操作は、READY 中のものだけ `forfeit` に結びつけています。プレイ中の ESC は B3 です。

@@ -613,7 +613,8 @@ impl<'a> CsvBuilder<'a> {
                 image
             })
             .collect::<Vec<_>>();
-        json!({
+        let pm_charas = self.pm_charas;
+        let mut document = json!({
             "type": self.header.skin_type,
             "lr2": true,
             "lr2Result": result,
@@ -655,6 +656,8 @@ impl<'a> CsvBuilder<'a> {
             "judge": judge,
             "bga": self.bga,
             "destination": self.destinations,
-        })
+        });
+        document["pmchara"] = JsonValue::Array(pm_charas);
+        document
     }
 }

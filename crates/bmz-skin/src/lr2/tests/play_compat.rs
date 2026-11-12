@@ -241,3 +241,52 @@ fn unmatched_glob_cannot_read_a_literal_star_link_outside_the_root() {
     assert!(loaded.warnings.is_empty());
     assert_eq!(loaded.value["source"][0]["path"], "public.png");
 }
+
+#[test]
+fn pm_chara_play_commands_become_pmchara_parts_with_destinations() {
+    let builder = process(&[
+        "#DST_PM_CHARA_1P,10,20,300,400,1,0,LR2files\\Theme\\chara\\a.chp",
+        "#DST_PM_CHARA_2P,500,20,300,400,2,0,chara/b",
+    ]);
+    assert_eq!(builder.pm_charas.len(), 2);
+    assert_eq!(builder.pm_charas[0]["type"], 0);
+    assert_eq!(builder.pm_charas[0]["side"], 1);
+    assert_eq!(builder.pm_charas[0]["color"], 1);
+    assert_eq!(builder.pm_charas[1]["side"], 2);
+    assert_eq!(builder.pm_charas[1]["color"], 2);
+    assert_eq!(builder.destinations.len(), 2);
+    assert_eq!(builder.destinations[0]["id"], builder.pm_charas[0]["id"]);
+    let source = builder.sources.iter().find(|s| s["id"] == builder.pm_charas[0]["src"]).unwrap();
+    assert!(source["path"].as_str().unwrap().ends_with("a.chp"));
+    let frame = &builder.destinations[0]["dst"][0];
+    assert_eq!(frame["x"], 10);
+    assert_eq!(frame["w"], 300);
+    assert_eq!(frame["h"], 400);
+}
+
+#[test]
+fn pm_chara_animation_maps_animation_type_and_keeps_timer_and_ops() {
+    let builder = process(&[
+        "#DST_PM_CHARA_ANIMATION,0,0,100,100,1,6,41,31,0,0,0,chara/a.chp",
+        "#DST_PM_CHARA_ANIMATION,0,0,100,100,1,10,0,0,0,0,0,chara/a.chp",
+    ]);
+    // animationtype 6 (WIN) -> pmchara type 12; 10 is out of range and makes nothing.
+    assert_eq!(builder.pm_charas.len(), 1);
+    assert_eq!(builder.pm_charas[0]["type"], 12);
+    assert_eq!(builder.destinations[0]["timer"], 41);
+    assert_eq!(builder.destinations[0]["op"].as_array().unwrap(), &[json!(31)]);
+}
+
+#[test]
+fn pm_chara_image_uses_the_following_image_destination() {
+    let builder = process(&[
+        "#SRC_PM_CHARA_IMAGE,2,1,chara/a.chp",
+        "#DST_PM_CHARA_IMAGE,0,0,5,6,70,80,0,255,255,255,255,1",
+        "#SRC_PM_CHARA_IMAGE,1,9,chara/a.chp",
+    ]);
+    // Name image (spec type 1) is BMZ pmchara type 2; type 9 makes nothing.
+    assert_eq!(builder.pm_charas.len(), 1);
+    assert_eq!(builder.pm_charas[0]["type"], 2);
+    assert_eq!(builder.pm_charas[0]["color"], 2);
+    assert_eq!(builder.destinations[0]["id"], builder.pm_charas[0]["id"]);
+}

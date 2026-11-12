@@ -1454,8 +1454,21 @@ type 0は通常・判定・曲終了状態からモーションを選び、type 
 直接指定、保存済み選択、wildcardの親ディレクトリと後続の階層では、完全一致を優先して
 ASCIIの大小文字差を補正します。探索は許可rootの内側で行い、途中のリンクの行き先も検査します。
 
-現状はPMcharaの`--`座標補間と、画像右下色を透過色にするchroma-key処理には未対応です。
-PNG等が持つalphaは通常どおり反映します。
+`.chp`の位置・不透明度・回転の`--`は、前後の値の間を等間隔に埋めます（整数は0方向へ切り捨て、
+前の値が無いときの不透明度・回転は0、位置は枠全体）。`--`があり1コマが17ms以上のときは、
+割り切れて17ms未満になる最小の数でコマを細分化します（画像の切り替えは元のコマ時間のまま）。
+`--`が文字列の末尾まで続くと、そのキャラの以降の層は読まず、それまでの層だけを残します。
+画像右下色を透過色にするchroma-key処理には未対応です。PNG等が持つalphaは通常どおり反映します。
+
+### LR2 CSVのPM_CHARA
+
+LR2 CSVの`#DST_PM_CHARA_1P` / `_2P`は`pmchara` type 0（side 1 / 2）、
+`#DST_PM_CHARA_ANIMATION`はanimationtype `0..9`を`pmchara` type `6..15`へ、
+`#SRC_PM_CHARA_IMAGE`のtype `0..4`（背景・名前・顔上半身・顔全体・アイコン）を
+`pmchara` type `1..5`へ対応させ、続く`#DST_PM_CHARA_IMAGE`を`#DST_IMAGE`と同じ列で読みます。
+colorは2以外を1Pの色にします。モーションの切り替えはBMZの内部ロジックで行い、
+スキンのタイマー900..909の個別の動きは再現しません（`#DST_PM_CHARA_ANIMATION`のtimerと条件は
+そのまま使います）。仕様は[SKIN_BEHAVIOR_SPEC](bmsir/SKIN_BEHAVIOR_SPEC.md)の3章です。
 
 ## Text opacity
 

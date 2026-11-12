@@ -114,6 +114,8 @@ pub(super) struct PlayRuntimeState {
     /// and `WinitApp` must stay below the stack-size bound.
     pub(super) pending_decide: Option<Box<DecideTransition>>,
     pub(super) pending_play_start: Option<PendingPlayStart>,
+    /// The BMS-IR Arena song being started or played (rule and note policy override).
+    pub(super) arena_play: Option<super::arena_flow::ArenaPlayLaunch>,
     pub(super) pending_play_preload: Option<PendingPlayPreload>,
     /// 中間リザルト表示中に開始した次コース譜面の先読み要求。
     pub(super) pending_course_stage_launch: Option<PendingCourseStageLaunch>,
@@ -291,6 +293,14 @@ pub(super) struct IntegrationRuntimeState {
     pub(super) obs_config_deferred: bool,
     pub(super) obs_controller: Option<crate::obs::ObsController>,
     pub(super) applied_obs_config: ObsConfig,
+    /// BMS-IR Arena connection (B1: connection only).
+    pub(super) arena: crate::arena::ArenaController,
+    pub(super) applied_arena: Option<ArenaApplied>,
+    /// Last select-cursor chart and chart check handed to Arena (to send each once).
+    pub(super) arena_selected_md5: Option<String>,
+    /// Last `play_option` handed to Arena for the option phase.
+    pub(super) arena_option_choice: Option<u32>,
+    pub(super) arena_answered_check: Option<crate::arena::session::ChartCheckRequest>,
     pub(super) exit_configs_saved: bool,
     /// Sparkle の再起動継続前と通常の `exiting` から共有する終了準備の冪等ガード。
     pub(super) exit_prepared: bool,
@@ -438,4 +448,14 @@ impl SongScanRuntime {
                     .any(|root| root.enabled && root.recursive && Path::new(&root.path) == dir)
             })
     }
+}
+
+/// What the running Arena connection was started with. A change restarts it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ArenaApplied {
+    pub(super) profile_id: String,
+    pub(super) enabled: bool,
+    pub(super) rule_mode: bmz_gameplay::rule::RuleMode,
+    /// Changes when the BMS-IR login changes, so a fresh login is picked up.
+    pub(super) bms_ir_last_login_at: Option<i64>,
 }

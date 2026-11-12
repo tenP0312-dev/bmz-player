@@ -19,6 +19,9 @@ impl WinitApp {
     }
 
     pub(super) fn begin_decide_for_chart(&mut self, chart_id: i64, mut options: PlayStartOptions) {
+        if self.arena_blocks_normal_start() {
+            return;
+        }
         let Some(chart_id) = self.resolve_play_chart_id(chart_id) else {
             return;
         };
@@ -140,15 +143,7 @@ impl WinitApp {
                 .ok()
                 .and_then(|mut charts| charts.pop())
         });
-        let (ln_policy_setting, rule_mode) = self
-            .play
-            .active_course
-            .as_ref()
-            .map(|course| (course.ln_policy_setting, course.rule_mode))
-            .unwrap_or((
-                self.boot.profile_config.play.ln_mode_policy,
-                self.boot.profile_config.play.rule_mode,
-            ));
+        let (ln_policy_setting, rule_mode) = self.effective_ln_policy_and_rule();
         snapshot.rule_mode_index = crate::skin_extension::rule_mode_index(rule_mode);
         snapshot.ln_score_policy_index = chart_metadata.as_ref().map(|chart| {
             crate::skin_extension::ln_score_policy_index(crate::ln_policy::course_score_ln_policy(
@@ -250,15 +245,7 @@ impl WinitApp {
         options.hs_fix = hs_fix_option_from_profile(
             self.boot.profile_config.play_mode_config(play_config_key_mode).hs_fix,
         );
-        let (ln_policy_setting, rule_mode) = self
-            .play
-            .active_course
-            .as_ref()
-            .map(|course| (course.ln_policy_setting, course.rule_mode))
-            .unwrap_or((
-                self.boot.profile_config.play.ln_mode_policy,
-                self.boot.profile_config.play.rule_mode,
-            ));
+        let (ln_policy_setting, rule_mode) = self.effective_ln_policy_and_rule();
         let mut session_options =
             play_session_options_from_start(&self.play_session_app_config(), options);
         session_options.play_config_key_mode = Some(play_config_key_mode);
@@ -373,12 +360,7 @@ impl WinitApp {
         } else {
             options.double_option.normalize_for_key_mode(source_key_mode)
         };
-        let ln_policy_setting = self
-            .play
-            .active_course
-            .as_ref()
-            .map(|course| course.ln_policy_setting)
-            .unwrap_or(self.boot.profile_config.play.ln_mode_policy);
+        let (ln_policy_setting, _) = self.effective_ln_policy_and_rule();
         let ln_policy = crate::ln_policy::course_score_ln_policy(
             ln_policy_setting,
             options.ln_mode_override,
@@ -554,15 +536,7 @@ impl WinitApp {
         chart: &ChartListItem,
         options: &PlayStartOptions,
     ) -> ScoreKey {
-        let (ln_policy_setting, rule_mode) = self
-            .play
-            .active_course
-            .as_ref()
-            .map(|course| (course.ln_policy_setting, course.rule_mode))
-            .unwrap_or((
-                self.boot.profile_config.play.ln_mode_policy,
-                self.boot.profile_config.play.rule_mode,
-            ));
+        let (ln_policy_setting, rule_mode) = self.effective_ln_policy_and_rule();
         let source_key_mode = KeyMode::from_str_opt(&chart.mode).unwrap_or_default();
         play_skin_score_key(
             chart.sha256,

@@ -341,6 +341,9 @@ impl WinitApp {
     }
 
     pub(super) fn maybe_start_ready_phase(&mut self) {
+        // The load is reported as soon as it is done, not after READY: the server's
+        // `start_at` is 5 s after the last `play_ready`.
+        self.arena_report_loaded();
         if self.scene_skin_entry_loading() {
             return;
         }
@@ -426,6 +429,14 @@ impl WinitApp {
         if self.play.play_ready_sound_started_at.is_some_and(|start| {
             start.elapsed().as_micros() < self.play.presentation.extra_ready_hold_us.max(0) as u128
         }) {
+            return;
+        }
+        // An Arena song stays in READY until `play_ready` was sent and the server
+        // clock puts the chart's 0 at `start_at` (the clock starts one skin
+        // `playstart` earlier).
+        let playstart_lead_us = (-self.play_skin_playstart_offset().0).max(0);
+        if self.arena_start_gate(playstart_lead_us) == super::arena_flow::ArenaStartGate::Hold {
+            self.update_pending_play_snapshot_timers();
             return;
         }
         let chart_zero_time = self

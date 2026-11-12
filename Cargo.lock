@@ -700,6 +700,7 @@ dependencies = [
  "image",
  "keyring",
  "libc",
+ "md5",
  "rars",
  "rayon",
  "reqwest",

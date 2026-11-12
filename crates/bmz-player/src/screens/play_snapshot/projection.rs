@@ -271,6 +271,12 @@ impl PlayfieldProjection {
             &self.cache,
             lane_now,
         );
+        // READY (chart time below zero): show only the first hit notes, no falling notes.
+        if chart_now.0 < 0
+            && let Some(first_notes) = &self.cache.ready_first_notes
+        {
+            first_notes.apply(snapshot, chart_now, snapshot.lane_cover, self.lift);
+        }
     }
 }
 

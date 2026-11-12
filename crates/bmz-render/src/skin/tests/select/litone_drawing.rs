@@ -70,6 +70,48 @@ fn lr2_folder_distribution_uses_source_clock_and_row_major_animation_frames() {
 }
 
 #[test]
+fn lr2_rank_distribution_draws_from_the_top_rank_and_uses_28_cell_frames() {
+    let document: SkinDocument = serde_json::from_value(serde_json::json!({
+        "type":5,"w":100,"h":100,
+        "graph":[{"id":"graph","src":"atlas","x":0,"y":0,"w":280,"h":20,"divx":28,"divy":2,"timer":0,"cycle":0,"lr2Distribution":true,"lr2RankDistribution":true}],
+        "songlist":{"id":"bars","liston":[{"id":"body","dst":[{"x":0,"y":40,"w":100,"h":20}]}],"graph":[{"id":"graph","dst":[{"x":0,"y":0,"w":80,"h":10}]}]},
+        "destination":[{"id":"bars"}]
+    })).unwrap();
+    let sources = HashMap::from([(
+        "atlas".into(),
+        SkinDocumentTexture {
+            source_id: "atlas".into(),
+            texture: SkinTextureId(1),
+            source_size: SkinImageSize { width: 280.0, height: 20.0 },
+        },
+    )]);
+    let mut counts = [0; 28];
+    counts[0] = 1;
+    counts[27] = 3;
+    let snapshot = SelectSnapshot {
+        time: TimeUs(175_000),
+        selection_time: TimeUs(75_000),
+        rows: vec![SelectRowSnapshot {
+            is_folder: true,
+            kind: SelectRowKind::Folder,
+            folder_lamp_counts: [5; 11],
+            folder_rank_counts: counts,
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let items = document.select_render_items(&sources, &snapshot);
+    assert_eq!(items.len(), 2, "{items:?}");
+    // Left to right: rank 27 (3 of 4 charts) first, then rank 0.
+    let SkinRenderItem::Image { uv, rect, .. } = &items[0] else { panic!() };
+    assert!(approx_eq(uv.x, 27.0 / 28.0), "{uv:?}");
+    assert!(approx_eq(rect.width, 0.6));
+    let SkinRenderItem::Image { uv, rect, .. } = &items[1] else { panic!() };
+    assert!(approx_eq(uv.x, 0.0));
+    assert!(approx_eq(rect.width, 0.2));
+}
+
+#[test]
 fn select_trophy_follows_course_definition_priority() {
     let mut row = SelectRowSnapshot {
         course_trophy_names: vec!["goldmedal".into(), "bronzemedal".into()],

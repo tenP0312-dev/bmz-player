@@ -467,6 +467,9 @@ pub struct SelectRowSnapshot {
     /// beatoraja DirectoryBar-style lamp distribution for folder rows.
     /// Indexes match SkinBar BARLAMP IDs: 0 no play, 1 failed, ... 10 max.
     pub folder_lamp_counts: [u32; 11],
+    /// Score-rank distribution for LR2 BAR_GRAPH type 1. Index k is the EX rate
+    /// split into 27 steps (k = floor(rate * 27)); 0 also holds unplayed charts.
+    pub folder_rank_counts: [u32; 28],
     /// Chart download progress for chart rows, drawn with the songlist `graph`
     /// images as in LR2oraja Endless Dream. `None` hides it.
     pub download_progress: Option<SelectRowDownloadProgress>,
@@ -576,6 +579,7 @@ impl Default for SelectRowSnapshot {
             chart_distribution: Vec::new(),
             chart_bpm_graph_segments: Vec::new(),
             folder_lamp_counts: [0; 11],
+            folder_rank_counts: [0; 28],
             download_progress: None,
             is_folder: false,
             kind: SelectRowKind::default(),

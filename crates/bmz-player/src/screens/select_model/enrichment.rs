@@ -266,13 +266,15 @@ pub(super) fn folder_summary_for_charts(
     rule_mode: RuleMode,
 ) -> Result<SelectFolderSummary> {
     let mut seen = HashSet::new();
-    let keys: Vec<ScoreKey> = charts
-        .iter()
-        .filter_map(|chart| {
-            let key = score_key_for_chart(chart, ln_policy_setting, rule_mode);
-            seen.insert(key).then_some(key)
-        })
-        .collect();
+    let mut keys: Vec<ScoreKey> = Vec::new();
+    let mut notes_by_key: HashMap<ScoreKey, u32> = HashMap::new();
+    for chart in &charts {
+        let key = score_key_for_chart(chart, ln_policy_setting, rule_mode);
+        if seen.insert(key) {
+            keys.push(key);
+            notes_by_key.insert(key, chart.total_notes);
+        }
+    }
     let score_map: HashMap<ScoreKey, BestScoreSummary> = score_db
         .best_scores_for_charts(&keys)?
         .into_iter()
@@ -290,14 +292,20 @@ pub(super) fn folder_summary_for_charts(
         .collect();
 
     let mut lamp_counts = [0; 11];
+    let mut rank_counts = [0; 28];
     for key in keys {
         let index = score_map
             .get(&key)
             .map(|score| folder_lamp_index_from_clear_type(&score.clear_type))
             .unwrap_or(0);
         lamp_counts[index] += 1;
+        let notes = notes_by_key.get(&key).copied().unwrap_or(0);
+        rank_counts[crate::screens::select_model::rank_distribution_index(
+            score_map.get(&key).map(|score| score.ex_score),
+            notes,
+        )] += 1;
     }
-    Ok(SelectFolderSummary { lamp_counts })
+    Ok(SelectFolderSummary { lamp_counts, rank_counts })
 }
 
 pub(super) fn replay_slot_map(

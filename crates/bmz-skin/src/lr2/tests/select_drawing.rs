@@ -1,23 +1,42 @@
 use super::*;
 
 #[test]
-fn lr2_select_rank_distribution_does_not_reuse_a_clear_distribution() {
+fn lr2_select_rank_distribution_uses_28_cells() {
     let root = unique_test_dir("lr2-select-rank-distribution");
     let path = root.join("select.lr2skin");
     fs::write(
         &path,
         concat!(
             "#INFORMATION,5,test,test\n#RESOLUTION,640,480\n#IMAGE,atlas.png\n",
-            "#SRC_BAR_GRAPH,0,0,0,0,11,1,11,1,0,0\n",
-            "#SRC_BAR_GRAPH,1,0,0,0,28,1,28,1,0,0\n",
+            "#SRC_BAR_GRAPH,1,0,0,0,280,20,28,2,0,0\n",
+            "#DST_BAR_GRAPH,0,0,0,0,100,10,0,255,255,255,255,1,0,0,0\n"
+        ),
+    )
+    .unwrap();
+    let loaded = load_lr2_csv_skin_value(&path, &BTreeMap::new(), &BTreeMap::new()).unwrap();
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+    let graph = &loaded.value["graph"][0];
+    assert_eq!(graph["lr2Distribution"], true);
+    assert_eq!(graph["lr2RankDistribution"], true);
+    assert_eq!(graph["divx"], 28);
+}
+
+#[test]
+fn lr2_select_rank_distribution_needs_28_cells() {
+    let root = unique_test_dir("lr2-select-rank-distribution-small");
+    let path = root.join("select.lr2skin");
+    fs::write(
+        &path,
+        concat!(
+            "#INFORMATION,5,test,test\n#RESOLUTION,640,480\n#IMAGE,atlas.png\n",
+            "#SRC_BAR_GRAPH,1,0,0,0,11,1,11,1,0,0\n",
             "#DST_BAR_GRAPH,0,0,0,0,100,10,0,255,255,255,255,1,0,0,0\n"
         ),
     )
     .unwrap();
     let loaded = load_lr2_csv_skin_value(&path, &BTreeMap::new(), &BTreeMap::new()).unwrap();
     assert_eq!(loaded.warnings.len(), 1);
-    assert!(loaded.warnings[0].message.contains("distribution type: 1"));
-    assert_eq!(loaded.value["songlist"]["graph"][0]["id"], "lr2-missing-bar-part");
+    assert!(loaded.warnings[0].message.contains("28 source cells"));
 }
 
 #[test]

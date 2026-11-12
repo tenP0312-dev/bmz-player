@@ -244,20 +244,19 @@ impl CsvBuilder<'_> {
 
     fn add_select_distribution_graph(&mut self, line: &CsvLine) {
         let values = parse_values(line);
-        if values[1] != 0 {
-            self.warn(format!("unsupported lr2 folder distribution type: {}", values[1]));
-            return;
-        }
+        // Type 0 is the 11 clear lamps, any other type the 28 score ranks.
+        let rank = values[1] != 0;
+        let cells: i64 = if rank { 28 } else { 11 };
         let Some(region) = self.source_region(&values) else { return };
-        if i64::from(region.divx) * i64::from(region.divy) < 11 {
-            self.warn("lr2 folder distribution needs at least eleven source cells".to_string());
+        if i64::from(region.divx) * i64::from(region.divy) < cells {
+            self.warn(format!("lr2 folder distribution needs at least {cells} source cells"));
             return;
         }
         let id = self.alloc_id("lr2-folder-graph");
         self.graphs.push(json!({
             "id":id,"src":region.src,"x":region.x,"y":region.y,"w":region.w,"h":region.h,
             "divx":region.divx,"divy":region.divy,"timer":region.timer,"cycle":region.cycle,
-            "type":-1,"angle":0,"lr2Distribution":true,
+            "type":-1,"angle":0,"lr2Distribution":true,"lr2RankDistribution":rank,
         }));
         self.set_current(id);
     }

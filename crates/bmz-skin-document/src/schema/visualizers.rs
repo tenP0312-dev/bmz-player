@@ -5,6 +5,9 @@ pub struct SkinGraphDef {
     /// LR2 BAR_GRAPH: eleven lamp cells per animation frame in source-grid order.
     #[serde(default, rename = "lr2Distribution")]
     pub lr2_distribution: bool,
+    /// LR2 BAR_GRAPH type 1: 28 score-rank cells per animation frame, not the 11 lamp cells.
+    #[serde(default, rename = "lr2RankDistribution")]
+    pub lr2_rank_distribution: bool,
     #[serde(default, deserialize_with = "deserialize_skin_id")]
     pub id: String,
     #[serde(default, deserialize_with = "deserialize_skin_id")]

@@ -91,7 +91,8 @@ B2 のうち、ルームの作成・入室、準備 OK、推薦、`chart` と `c
 
 | 操作 | 送るもの |
 |---|---|
-| ルームを作る | `room_entry`（`match_mode="private"`、`series_format="single"`） |
+| ルームを作る | `room_entry`（`match_mode="private"` と土台の固定設定の全項目） |
+| ルームから抜ける | `queue_cancel` |
 | コードで入る | `room_entry`（`match_mode="private"`、`room_code`、あれば `room_password`） |
 | 準備 OK | `room_ready`（`ready`）と `state`（選曲画面で、ルームにいて、準備 OK のときだけ `ready=true`） |
 | 選択中の譜面を推薦 | `chart_nominate`（`match_id`、`chart_hash`=MD5）。推薦の時間中に 1 回だけ |
@@ -110,22 +111,25 @@ B2 のうち、ルームの作成・入室、準備 OK、推薦、`chart` と `c
 - `hello_ok` の `active_match_id` が空なら、手元の試合の状態を消します。
 - 試合中は新しいルームへ入れません。
 
-### 仕様書に項目名が無いため、送っていない・読んでいないもの
+### サーバーの項目名（`ARENA_SERVER_MESSAGES.md` に合わせた部分）
 
-推測で埋めていません。サーバーの実際の項目名を教えてもらえれば足します。
+項目名と型は [ARENA_SERVER_MESSAGES.md](ARENA_SERVER_MESSAGES.md) を正とします。
 
-| 場面 | 不明な点 |
+| 場面 | BMZ の扱い |
 |---|---|
-| `room_entry`（作る） | 土台の固定設定（公開、勝ち負け=EX SCORE、ゲージ=自由、選曲範囲=`free`、推薦=全員、LN、ルール、キー数=7KEY）の項目名と値。今は `match_mode` と `series_format` だけを送ります |
-| ルームから抜ける | メッセージ名（パネルに「抜ける」ボタンがありません） |
-| `room_status` | 参加者・準備の状態の項目名。`room_code` だけ読みます |
-| `nomination_status` | 自分の推薦の有無・締め切りの項目名。読んでいません（`nomination_started.deadline` と `nomination_accepted` で代用） |
-| `nomination_started` | `deadline` を読みます（項目名が仕様書にあるのは `fill_started` だけで、同じ名前と仮定）。違えば残り秒数が出ないだけです |
-| `players_updated` | 項目名。読んでいません（人数は `fill_started` のみ） |
-| `nominations_revealed` | 候補と選ばれた候補の項目名。読んでいません |
-| `ln_mode` | JSON の型（文字列か数）。どちらでも文字列にして保持します |
-| `match_reserved.rules` / `chart.rules` | 中身。読んでいません |
-| `chart` | `chart.md5` / `title` / `artist` / `totalnotes` は仕様書にあります。`match_id` を含むかは不明なので、あれば現在の試合と照合し、無ければ現在の試合のものとして扱います |
+| `room_entry`（作る） | 全項目を送る：`score_rule=exscore`、`forced_gauge=free`、`chart_scope=free`、`ruleset_profile`（`hello` と同じ）、`ln_mode=LN`、`nomination_policy=all`、`nomination_seconds=60`、`option_seconds=10`、`intermission_seconds=0`、`series_format=single`、`first_to_wins=2`、`spectator_public=false`、`force_host_option=false`、`allowed_play_modes=[7]`。`public` / `seconds` / `password` という名前の項目はサーバーにありません |
+| `room_entry`（入る） | `room_code` と、あれば `room_password` だけ（ルールは部屋のものになる） |
+| `room_settings`（ホスト） | 省略した時間・形式の項目はサーバーが既定に戻すため、`ln_mode` 以外の全項目を送る。パネルのボタン「ルームの設定を送り直す」（ホストのみ） |
+| ルームから抜ける | `queue_cancel`。試合前は即時に部屋を消す。試合中は `match_released` / `forfeit_accepted` まで待つ |
+| `room_status` | `players[]`（`player_id`、`name`、`host`、`participating`、`pending`、`ready`）、`rules.room_host_id`、`rules.ln_mode`。自分の準備 OK は手元の要求を優先し、サーバーの古い `room_status` で上書きしない |
+| `nomination_started` / `nomination_status` | `deadline`、`can_nominate`、`required_count`、`submitted_count`、`retry_reason`、`players[].submitted`。「推薦済み」はサーバーの `submitted` に従う。`retry_reason` があれば再推薦を促す |
+| `players_updated` | `player_ids` の数を人数にする（現在の試合の `match_id` のときだけ） |
+| `nominations_revealed` | `nominations[]`、`selected_player_id`、`chart.md5`、`reroll_count` |
+| `ln_mode` | 文字列（`LN` / `CN` / `HCN`、大文字にそろえる） |
+| `ready` | `state` が `select` のときだけ有効（サーバーは `state` のたびに上書きする）。BMZ は `select` 以外では `ready=false` を送る |
+
+まだ読んでいない・使っていないもの：`match_reserved.rules`、`chart.rules`、`chat_history`、`result`（B3）。
+`chat_send` の応答や `chart` の追加キーは資料でも「未確認」です。
 
 ## 練習・AUTOPLAY・リプレイ・コースの `state` と `ready`（案）
 

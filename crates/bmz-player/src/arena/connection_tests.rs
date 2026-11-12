@@ -308,9 +308,23 @@ async fn room_nomination_and_chart_check_over_the_wire() {
 
     controller.handle().create_room();
     let entry = recv_kind(&mut server, "room_entry").await;
-    assert_eq!(entry, json!({"type":"room_entry","match_mode":"private","series_format":"single"}));
+    assert_eq!(entry["match_mode"], "private");
+    assert_eq!(entry["room_name"], serde_json::Value::Null);
+    assert_eq!(entry["ln_mode"], "LN");
+    assert_eq!(entry["allowed_play_modes"], json!([7]));
+    assert_eq!(entry["chart_scope"], "free");
 
-    reply(&mut server, json!({"type":"room_status","room_code":"AB12","players":[]})).await;
+    reply(
+        &mut server,
+        json!({"type":"room_status","room_code":"AB12","rules":{"room_host_id":4242},
+               "players":[{"player_id":4242,"name":"me","host":true,"participating":true,
+                           "pending":false,"ready":false}]}),
+    )
+    .await;
+    wait_for(&controller, "room players", |p| {
+        p.room.as_ref().is_some_and(|room| room.players.len() == 1 && room.host_id == Some(4242))
+    })
+    .await;
     controller.handle().set_ready(true);
     assert_eq!(recv_kind(&mut server, "room_ready").await["ready"], true);
     assert_eq!(recv_kind(&mut server, "state").await["ready"], true);
@@ -321,7 +335,12 @@ async fn room_nomination_and_chart_check_over_the_wire() {
                "finish_current_song":false,"reservation_timeout":30}),
     )
     .await;
-    reply(&mut server, json!({"type":"nomination_started","deadline":now_unix() + 30.0})).await;
+    reply(
+        &mut server,
+        json!({"type":"nomination_started","match_id":"m1","deadline":now_unix() + 30.0,
+               "can_nominate":true,"required_count":1,"submitted_count":0,"players":[]}),
+    )
+    .await;
     wait_for(&controller, "nominating", |p| {
         p.current_match
             .as_ref()
@@ -349,5 +368,9 @@ async fn room_nomination_and_chart_check_over_the_wire() {
     reply(&mut server, json!({"type":"match_cancelled","reason":"load_timeout"})).await;
     wait_for(&controller, "match cleared", |p| p.current_match.is_none() && p.match_end.is_some())
         .await;
+
+    controller.handle().leave_room();
+    assert_eq!(recv_kind(&mut server, "queue_cancel").await, json!({"type":"queue_cancel"}));
+    wait_for(&controller, "room left", |p| p.room.is_none()).await;
     controller.shutdown();
 }

@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::arena::protocol::{
-    ARENA_CLIENT_VERSION, CLIENT_FLAVOR, ChartAnnounced, HelloOk, MatchReserved, PROTOCOL_VERSION,
-    RulesetProfile, passmd5,
+    ARENA_CLIENT_VERSION, CLIENT_FLAVOR, ChartAnnounced, HelloOk, MatchReserved, NominationInfo,
+    PROTOCOL_VERSION, RoomStatusInfo, RulesetProfile, passmd5,
 };
 
 const MD5: &str = "0123456789abcdef0123456789abcdef";
@@ -79,6 +79,21 @@ fn chart(id: Option<&str>, md5: &str) -> ServerMessage {
     })
 }
 
+fn nomination_started(id: &str, deadline: Option<f64>) -> ServerMessage {
+    ServerMessage::NominationStarted(NominationInfo {
+        match_id: id.into(),
+        deadline,
+        ..NominationInfo::default()
+    })
+}
+
+fn room_status(code: &str) -> ServerMessage {
+    ServerMessage::RoomStatus(RoomStatusInfo {
+        room_code: Some(code.into()),
+        ..RoomStatusInfo::default()
+    })
+}
+
 fn in_nomination(session: &mut ArenaSession, id: &str) {
     session.handle(at(1.0), Event::RoomCreate);
     recv(session, reserved(id));
@@ -90,17 +105,20 @@ fn in_nomination(session: &mut ArenaSession, id: &str) {
             max_players: Some(4),
         },
     );
-    recv(session, ServerMessage::NominationStarted { deadline: Some(1_060.0) });
+    recv(session, nomination_started(id, Some(1_060.0)));
 }
 
 #[test]
 fn creating_and_joining_a_room_send_room_entry() {
     let mut session = connected();
     let create = sent(&session.handle(at(1.0), Event::RoomCreate));
-    assert_eq!(
-        json(&create[0]),
-        serde_json::json!({"type":"room_entry","match_mode":"private","series_format":"single"})
-    );
+    let value = json(&create[0]);
+    assert_eq!(value["type"], "room_entry");
+    assert_eq!(value["match_mode"], "private");
+    assert_eq!(value["series_format"], "single");
+    assert_eq!(value["allowed_play_modes"], serde_json::json!([7]));
+    // The hello's ruleset (oraja here) is the room's.
+    assert_eq!(value["ruleset_profile"], "oraja");
     assert_eq!(session.panel().room, Some(RoomView::default()));
 
     let mut session = connected();
@@ -132,7 +150,7 @@ fn room_commands_need_a_connection() {
 fn room_status_sets_the_code_and_ready_goes_into_state() {
     let mut session = connected();
     session.handle(at(1.0), Event::RoomCreate);
-    recv(&mut session, ServerMessage::RoomStatus { room_code: Some("ZZ99".into()) });
+    recv(&mut session, room_status("ZZ99"));
     assert_eq!(session.panel().room.unwrap().code.as_deref(), Some("ZZ99"));
 
     let messages = sent(&session.handle(at(2.0), Event::SetReady(true)));
@@ -174,7 +192,7 @@ fn the_flow_up_to_the_chosen_chart() {
     assert!(sent(&session.handle(at(3.0), Event::Nominate(MD5.into()))).is_empty());
     assert!(sent(&session.handle(at(3.0), Event::SkipNomination)).is_empty());
 
-    recv(&mut session, ServerMessage::NominationsRevealed);
+    recv(&mut session, ServerMessage::NominationsRevealed(Default::default()));
     assert_eq!(session.panel().current_match.unwrap().stage, MatchStage::Revealed);
 
     recv(&mut session, chart(Some("m1"), MD5));
@@ -223,7 +241,7 @@ fn nominations_are_refused_outside_the_nomination_stage_or_for_bad_hashes() {
     recv(&mut session, reserved("m1"));
     // Reserved but not yet nominating.
     assert!(sent(&session.handle(at(2.0), Event::Nominate(MD5.into()))).is_empty());
-    recv(&mut session, ServerMessage::NominationStarted { deadline: None });
+    recv(&mut session, nomination_started("m1", None));
     assert!(sent(&session.handle(at(3.0), Event::Nominate("xyz".into()))).is_empty());
     assert!(sent(&session.handle(at(3.0), Event::Nominate(MD5[..31].into()))).is_empty());
     assert_eq!(sent(&session.handle(at(3.0), Event::Nominate(MD5.into()))).len(), 1);
@@ -345,4 +363,196 @@ fn a_room_cannot_be_entered_during_a_match() {
     let mut session = connected();
     in_nomination(&mut session, "m1");
     assert!(sent(&session.handle(at(2.0), Event::RoomCreate)).is_empty());
+}
+
+fn room_with_players(code: &str, host_id: u64, players: &[(u64, bool)]) -> ServerMessage {
+    use crate::arena::protocol::RoomPlayer;
+    ServerMessage::RoomStatus(RoomStatusInfo {
+        room_code: Some(code.into()),
+        room_host_id: Some(host_id),
+        ln_mode: "LN".into(),
+        players: players
+            .iter()
+            .map(|&(player_id, ready)| RoomPlayer {
+                player_id,
+                name: format!("p{player_id}"),
+                host: player_id == host_id,
+                participating: true,
+                pending: false,
+                ready,
+            })
+            .collect(),
+    })
+}
+
+#[test]
+fn room_status_keeps_players_without_overriding_the_local_ready_request() {
+    let mut session = connected();
+    session.handle(at(1.0), Event::RoomCreate);
+    session.handle(at(1.0), Event::SetReady(true));
+    // A status sent before the server saw our ready still says false.
+    recv(&mut session, room_with_players("AB12", 7, &[(7, false), (9, true)]));
+    let room = session.panel().room.unwrap();
+    assert!(room.ready, "the local request must survive an older room_status");
+    assert_eq!(room.host_id, Some(7));
+    assert_eq!(room.players.len(), 2);
+    assert!(room.players[1].ready);
+    assert_eq!(room.ln_mode, "LN");
+}
+
+#[test]
+fn leaving_a_room_sends_queue_cancel_and_clears_the_room() {
+    let mut session = connected();
+    session.handle(at(1.0), Event::RoomCreate);
+    recv(&mut session, room_status("AB12"));
+    let messages = sent(&session.handle(at(2.0), Event::RoomLeave));
+    assert_eq!(json(&messages[0]), serde_json::json!({"type":"queue_cancel"}));
+    assert_eq!(session.panel().room, None);
+    // Not in a room: nothing to send.
+    assert!(sent(&session.handle(at(3.0), Event::RoomLeave)).is_empty());
+}
+
+#[test]
+fn leaving_during_a_match_waits_for_the_servers_release() {
+    let mut session = connected();
+    session.handle(at(1.0), Event::RoomCreate);
+    recv(&mut session, room_status("AB12"));
+    recv(&mut session, reserved("m1"));
+    let messages = sent(&session.handle(at(2.0), Event::RoomLeave));
+    assert_eq!(json(&messages[0]), serde_json::json!({"type":"queue_cancel"}));
+    assert!(session.panel().room.is_some());
+    assert!(session.panel().current_match.is_some());
+    recv(&mut session, ServerMessage::MatchReleased);
+    assert!(session.panel().current_match.is_none());
+}
+
+#[test]
+fn only_the_host_can_apply_room_settings_and_all_fields_are_sent() {
+    let mut session = connected();
+    session.handle(at(1.0), Event::RoomCreate);
+    recv(&mut session, room_with_players("AB12", 9, &[(9, false), (7, false)]));
+    assert!(sent(&session.handle(at(2.0), Event::RoomSettingsApply)).is_empty());
+    recv(&mut session, room_with_players("AB12", 7, &[(7, false), (9, false)]));
+    let messages = sent(&session.handle(at(3.0), Event::RoomSettingsApply));
+    let value = json(&messages[0]);
+    assert_eq!(value["type"], "room_settings");
+    for key in [
+        "score_rule",
+        "forced_gauge",
+        "chart_scope",
+        "ruleset_profile",
+        "nomination_policy",
+        "nomination_seconds",
+        "option_seconds",
+        "intermission_seconds",
+        "series_format",
+        "first_to_wins",
+        "spectator_public",
+        "force_host_option",
+        "allowed_play_modes",
+    ] {
+        assert!(value.get(key).is_some(), "missing {key}");
+    }
+    assert!(value.get("ln_mode").is_none());
+}
+
+#[test]
+fn players_updated_sets_the_player_count_for_the_current_match_only() {
+    let mut session = connected();
+    session.handle(at(1.0), Event::RoomCreate);
+    recv(&mut session, reserved("m1"));
+    recv(
+        &mut session,
+        ServerMessage::PlayersUpdated { match_id: "other".into(), player_ids: vec![1, 2, 3] },
+    );
+    assert_eq!(session.panel().current_match.unwrap().player_count, None);
+    recv(
+        &mut session,
+        ServerMessage::PlayersUpdated { match_id: "m1".into(), player_ids: vec![7, 9] },
+    );
+    assert_eq!(session.panel().current_match.unwrap().player_count, Some(2));
+}
+
+#[test]
+fn nomination_status_follows_the_servers_submitted_flag_and_deadline() {
+    use crate::arena::protocol::NominationPlayer;
+    let mut session = connected();
+    in_nomination(&mut session, "m1");
+    assert!(!session.panel().current_match.unwrap().nominated);
+    let status = |submitted: bool, deadline: f64, retry: &str| {
+        ServerMessage::NominationStatus(NominationInfo {
+            match_id: "m1".into(),
+            deadline: Some(deadline),
+            required_count: Some(1),
+            submitted_count: Some(submitted as u32),
+            retry_reason: retry.into(),
+            players: vec![NominationPlayer {
+                player_id: 7,
+                submitted,
+                ..NominationPlayer::default()
+            }],
+            ..NominationInfo::default()
+        })
+    };
+    recv(&mut session, status(true, 1_070.0, ""));
+    let view = session.panel().current_match.unwrap();
+    assert!(view.nominated);
+    assert_eq!(view.deadline, Some(1_070.0));
+    // The server asks again: nominating opens again.
+    recv(&mut session, status(false, 1_090.0, "free_selection_requires_nomination"));
+    let view = session.panel().current_match.unwrap();
+    assert!(!view.nominated);
+    assert_eq!(view.retry_reason, "free_selection_requires_nomination");
+    // A status for another match is ignored.
+    recv(
+        &mut session,
+        ServerMessage::NominationStatus(NominationInfo {
+            match_id: "x".into(),
+            deadline: Some(5.0),
+            ..NominationInfo::default()
+        }),
+    );
+    assert_eq!(session.panel().current_match.unwrap().deadline, Some(1_090.0));
+}
+
+#[test]
+fn a_player_with_nothing_to_nominate_is_not_offered_the_buttons() {
+    let mut session = connected();
+    session.handle(at(1.0), Event::RoomCreate);
+    recv(&mut session, reserved("m1"));
+    recv(
+        &mut session,
+        ServerMessage::NominationStarted(NominationInfo {
+            match_id: "m1".into(),
+            can_nominate: Some(false),
+            ..NominationInfo::default()
+        }),
+    );
+    assert!(sent(&session.handle(at(2.0), Event::Nominate(MD5.into()))).is_empty());
+    assert!(sent(&session.handle(at(2.0), Event::SkipNomination)).is_empty());
+}
+
+#[test]
+fn revealed_nominations_are_kept_for_the_panel() {
+    use crate::arena::protocol::{NominationsRevealed, RevealedNomination};
+    let mut session = connected();
+    in_nomination(&mut session, "m1");
+    recv(
+        &mut session,
+        ServerMessage::NominationsRevealed(NominationsRevealed {
+            match_id: "m1".into(),
+            nominations: vec![RevealedNomination {
+                player_id: 7,
+                source: "player_selected".into(),
+                md5: MD5.into(),
+                ..RevealedNomination::default()
+            }],
+            selected_player_id: Some(7),
+            md5: MD5.into(),
+            reroll_count: Some(0),
+        }),
+    );
+    let view = session.panel().current_match.unwrap();
+    assert_eq!(view.stage, MatchStage::Revealed);
+    assert_eq!(view.revealed.unwrap().selected_player_id, Some(7));
 }

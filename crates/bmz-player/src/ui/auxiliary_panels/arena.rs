@@ -73,6 +73,28 @@ fn build_room_controls(
     if ui.checkbox(&mut ready, tr!(text, "arena-ready")).changed() {
         arena.set_ready(ready);
     }
+    for player in &room.players {
+        let state = if player.ready {
+            tr!(text, "arena-member-ready")
+        } else {
+            tr!(text, "arena-member-waiting")
+        };
+        let mut line =
+            tr!(text, "arena-member-line", "name" => player.name.as_str(), "state" => state);
+        if player.host {
+            line = format!("{line} {}", tr!(text, "arena-host-tag"));
+        }
+        ui.label(line);
+    }
+    ui.horizontal(|ui| {
+        if ui.button(tr!(text, "arena-room-leave")).clicked() {
+            arena.leave_room();
+        }
+        let is_host = room.host_id.is_some_and(|id| Some(id) == panel.own_player_id);
+        if is_host && ui.button(tr!(text, "arena-room-settings-apply")).clicked() {
+            arena.apply_room_settings();
+        }
+    });
 }
 
 fn build_match_status(
@@ -117,7 +139,15 @@ fn build_match_status(
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
     }
     if current.stage == MatchStage::Nominating {
-        if current.nominated {
+        if !current.retry_reason.is_empty() {
+            ui.label(
+                tr!(text, "arena-nomination-retry", "reason" => current.retry_reason.as_str()),
+            );
+        }
+        // `can_nominate` is false when the server wants none from this player
+        // (host or rotate policy).
+        if !current.can_nominate {
+        } else if current.nominated {
             ui.label(tr!(text, "arena-nominated"));
         } else {
             ui.horizontal(|ui| {

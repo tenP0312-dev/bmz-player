@@ -67,6 +67,16 @@ impl ArenaHandle {
         self.send(Command::Session(Event::RoomJoin { code, password }));
     }
 
+    /// Leave the room (`queue_cancel`).
+    pub fn leave_room(&self) {
+        self.send(Command::Session(Event::RoomLeave));
+    }
+
+    /// Host: send all room settings again (`room_settings`).
+    pub fn apply_room_settings(&self) {
+        self.send(Command::Session(Event::RoomSettingsApply));
+    }
+
     pub fn set_ready(&self, ready: bool) {
         self.send(Command::Session(Event::SetReady(ready)));
     }

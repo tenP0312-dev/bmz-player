@@ -218,17 +218,19 @@ fn match_setup_messages_are_read_with_only_the_named_fields() {
         }
     );
     assert_eq!(
-        parse_server_message(r#"{"type":"nomination_started","deadline":9}"#).unwrap(),
-        ServerMessage::NominationStarted { deadline: Some(9.0) }
-    );
-    assert_eq!(
-        parse_server_message(r#"{"type":"nominations_revealed","candidates":[]}"#).unwrap(),
-        ServerMessage::NominationsRevealed
+        parse_server_message(r#"{"type":"nomination_started","match_id":"m1","deadline":9}"#)
+            .unwrap(),
+        ServerMessage::NominationStarted(NominationInfo {
+            match_id: "m1".into(),
+            deadline: Some(9.0),
+            ..NominationInfo::default()
+        })
     );
     assert_eq!(
         parse_server_message(
             r#"{"type":"chart","match_id":"m1","chart":{"md5":"ABCD","title":"t","artist":"a",
-            "totalnotes":1200},"random_seed":5,"ln_mode":1,"load_deadline":3.5}"#
+            "totalnotes":1200},"random_seed":5,"ln_mode":"cn","load_deadline":3.5,
+            "reroll_count":1,"play_mode":7}"#
         )
         .unwrap(),
         ServerMessage::Chart(ChartAnnounced {
@@ -238,8 +240,10 @@ fn match_setup_messages_are_read_with_only_the_named_fields() {
             artist: "a".into(),
             totalnotes: Some(1200),
             random_seed: Some(5),
-            ln_mode: "1".into(),
+            ln_mode: "CN".into(),
             load_deadline: Some(3.5),
+            reroll_count: Some(1),
+            play_mode: Some(7),
         })
     );
     assert_eq!(
@@ -250,9 +254,105 @@ fn match_setup_messages_are_read_with_only_the_named_fields() {
         parse_server_message(r#"{"type":"match_released"}"#).unwrap(),
         ServerMessage::MatchReleased
     );
+}
+
+#[test]
+fn room_status_reads_players_host_and_ready() {
+    let message = parse_server_message(
+        r#"{"type":"room_status","room_code":"AB12","paused":false,
+        "rules":{"room_host_id":7,"ln_mode":"LN"},
+        "players":[{"player_id":7,"name":"a","host":true,"participating":true,"pending":false,"ready":true},
+                   {"player_id":9,"name":"b","host":false,"participating":false,"pending":true,"ready":"1"},
+                   {"name":"no id"}]}"#,
+    )
+    .unwrap();
     assert_eq!(
-        parse_server_message(r#"{"type":"room_status","room_code":"AB12","players":[]}"#).unwrap(),
-        ServerMessage::RoomStatus { room_code: Some("AB12".into()) }
+        message,
+        ServerMessage::RoomStatus(RoomStatusInfo {
+            room_code: Some("AB12".into()),
+            room_host_id: Some(7),
+            ln_mode: "LN".into(),
+            players: vec![
+                RoomPlayer {
+                    player_id: 7,
+                    name: "a".into(),
+                    host: true,
+                    participating: true,
+                    pending: false,
+                    ready: true
+                },
+                // "1" is not `true`: the server only honours real booleans.
+                RoomPlayer {
+                    player_id: 9,
+                    name: "b".into(),
+                    host: false,
+                    participating: false,
+                    pending: true,
+                    ready: false
+                },
+            ],
+        })
+    );
+}
+
+#[test]
+fn nomination_payload_players_counts_and_your_nomination() {
+    let message = parse_server_message(
+        r#"{"type":"nomination_status","match_id":"m1","deadline":1060.5,"can_nominate":false,
+        "required_count":1,"submitted_count":1,"retry_reason":"free_selection_requires_nomination",
+        "players":[{"player_id":7,"name":"a","submitted":true,"host":true,"selector":false}],
+        "your_nomination":{"md5":"ABCDEF","title":"t"}}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        message,
+        ServerMessage::NominationStatus(NominationInfo {
+            match_id: "m1".into(),
+            deadline: Some(1060.5),
+            can_nominate: Some(false),
+            required_count: Some(1),
+            submitted_count: Some(1),
+            retry_reason: "free_selection_requires_nomination".into(),
+            players: vec![NominationPlayer {
+                player_id: 7,
+                name: "a".into(),
+                submitted: true,
+                host: true,
+                selector: false
+            }],
+            your_nomination: Some("abcdef".into()),
+        })
+    );
+}
+
+#[test]
+fn players_updated_and_nominations_revealed() {
+    assert_eq!(
+        parse_server_message(r#"{"type":"players_updated","match_id":"m1","player_ids":[7,9]}"#)
+            .unwrap(),
+        ServerMessage::PlayersUpdated { match_id: "m1".into(), player_ids: vec![7, 9] }
+    );
+    assert_eq!(
+        parse_server_message(
+            r#"{"type":"nominations_revealed","match_id":"m1","selected_player_id":0,
+            "reroll_count":0,"chart":{"md5":"AA"},
+            "nominations":[{"player_id":7,"name":"a","source":"player_selected",
+            "chart":{"md5":"AA","title":"t"}}]}"#
+        )
+        .unwrap(),
+        ServerMessage::NominationsRevealed(NominationsRevealed {
+            match_id: "m1".into(),
+            nominations: vec![RevealedNomination {
+                player_id: 7,
+                name: "a".into(),
+                source: "player_selected".into(),
+                md5: "aa".into(),
+                title: "t".into()
+            }],
+            selected_player_id: Some(0),
+            md5: "aa".into(),
+            reroll_count: Some(0),
+        })
     );
 }
 
@@ -264,6 +364,73 @@ fn match_setup_messages_without_fields_do_not_fail() {
     );
     assert_eq!(
         parse_server_message(r#"{"type":"room_status"}"#).unwrap(),
-        ServerMessage::RoomStatus { room_code: None }
+        ServerMessage::RoomStatus(RoomStatusInfo::default())
     );
+    assert_eq!(
+        parse_server_message(r#"{"type":"nomination_started"}"#).unwrap(),
+        ServerMessage::NominationStarted(NominationInfo::default())
+    );
+}
+
+#[test]
+fn ln_mode_is_an_upper_case_string() {
+    let reserved =
+        parse_server_message(r#"{"type":"match_reserved","match_id":"m","ln_mode":"hcn"}"#)
+            .unwrap();
+    let ServerMessage::MatchReserved(reserved) = reserved else { panic!() };
+    assert_eq!(reserved.ln_mode, "HCN");
+}
+
+fn foundation_rules_json() -> Value {
+    json!({
+        "score_rule": "exscore", "forced_gauge": "free", "chart_scope": "free",
+        "ruleset_profile": "oraja", "nomination_policy": "all", "nomination_seconds": 60,
+        "option_seconds": 10, "intermission_seconds": 0, "series_format": "single",
+        "first_to_wins": 2, "spectator_public": false, "force_host_option": false,
+        "allowed_play_modes": [7]
+    })
+}
+
+#[test]
+fn room_entry_create_sends_every_setting_by_the_servers_names() {
+    let message = ClientMessage::RoomEntry(RoomEntry::create(RulesetProfile::Oraja));
+    let mut expected = foundation_rules_json();
+    expected["type"] = json!("room_entry");
+    expected["match_mode"] = json!("private");
+    expected["ln_mode"] = json!("LN");
+    let value: Value = serde_json::from_str(&message.to_json().unwrap()).unwrap();
+    assert_eq!(value, expected);
+    // The names the old draft guessed do not exist on the server.
+    for wrong in ["public", "seconds", "password"] {
+        assert!(value.get(wrong).is_none());
+    }
+}
+
+#[test]
+fn room_entry_join_sends_only_the_code_and_password() {
+    let message = ClientMessage::RoomEntry(RoomEntry::join("AB12".into(), Some("pw".into())));
+    let value: Value = serde_json::from_str(&message.to_json().unwrap()).unwrap();
+    assert_eq!(
+        value,
+        json!({"type":"room_entry","match_mode":"private","room_code":"AB12","room_password":"pw"})
+    );
+}
+
+#[test]
+fn room_settings_carries_all_fields_and_never_ln_mode() {
+    let message = ClientMessage::RoomSettings(RoomSettings {
+        rules: Box::new(RoomRules::foundation(RulesetProfile::Oraja)),
+    });
+    let mut expected = foundation_rules_json();
+    expected["type"] = json!("room_settings");
+    let value: Value = serde_json::from_str(&message.to_json().unwrap()).unwrap();
+    assert_eq!(value, expected);
+    assert!(value.get("ln_mode").is_none());
+}
+
+#[test]
+fn queue_cancel_has_no_fields() {
+    let value: Value =
+        serde_json::from_str(&ClientMessage::QueueCancel {}.to_json().unwrap()).unwrap();
+    assert_eq!(value, json!({"type":"queue_cancel"}));
 }

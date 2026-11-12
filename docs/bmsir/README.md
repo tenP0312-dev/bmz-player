@@ -30,3 +30,14 @@ them without access to the BMS-IR repository.
 6. Do not copy Arena oraja (beatoraja-derived, GPL) code; implement from the
    described behavior. Commit messages do not include AI model names (operator
    decision; overrides the upstream AGENTS.md request).
+
+## Skin behavior spec decisions (2026-11-12, BMS-Mania/IR#1586)
+
+Spec: `SKIN_BEHAVIOR_SPEC.md` (behavior written from the original players;
+copy of the BMS-IR document). Use it instead of reading oraja code.
+
+1. Numbers 378 / 379 when the value is missing: follow oraja / LR2oraja ED
+   (show the value oraja shows, such as 0 or -1), not BMZ's "hidden".
+2. Text gradient when both names are present: the BMZ name (`colorTop` style)
+   wins; the Arena oraja name (`gradientTopColor` style) is used only when the
+   BMZ name is absent.

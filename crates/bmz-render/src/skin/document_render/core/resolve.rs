@@ -299,6 +299,19 @@ macro_rules! skin_document_render_core_resolve_methods {
                     ));
                 }
 
+                if let Some(floatvalue) =
+                    self.floatvalue.iter().find(|item| item.id == destination.id)
+                {
+                    let elapsed = if destination.lr2_timing {
+                        skin_timer_elapsed_ms(floatvalue.timer, state).unwrap_or(0).max(0)
+                    } else {
+                        elapsed
+                    };
+                    return Some(float_value_render_items(
+                        self, floatvalue, frame, elapsed, state, sources,
+                    ));
+                }
+
                 if let Some(graph) =
                     indexed_destination_object(&self.graph, objects.map(|o| o.graph), |item| {
                         item.id == destination.id
@@ -678,6 +691,18 @@ macro_rules! skin_document_render_core_resolve_methods {
                     false,
                     None,
                     signed_render,
+                ));
+            }
+
+            if let Some(floatvalue) = self.floatvalue.iter().find(|item| item.id == destination.id)
+            {
+                let elapsed = if destination.lr2_timing {
+                    skin_timer_elapsed_ms(floatvalue.timer, state).unwrap_or(0).max(0)
+                } else {
+                    elapsed
+                };
+                return Some(float_value_render_items(
+                    self, floatvalue, frame, elapsed, state, sources,
                 ));
             }
 

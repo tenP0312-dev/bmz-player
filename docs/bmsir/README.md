@@ -30,3 +30,20 @@ them without access to the BMS-IR repository.
 6. Do not copy Arena oraja (beatoraja-derived, GPL) code; implement from the
    described behavior. Commit messages do not include AI model names (operator
    decision; overrides the upstream AGENTS.md request).
+
+## Arena foundation decisions (2026-11-12, BMS-Mania/IR#1588)
+
+Spec: `SPEC_ARENA_FOUNDATION.md` (copy of the BMS-IR document). All nine
+proposals in the spec are accepted:
+
+1. Start with unrated rooms; rated matches come later (step 7).
+2. Server flavor name: `bmz-player`.
+3. Separate version/build allowlists per flavor.
+4. For now BMZ plays only against BMZ (no mixing with Arena oraja).
+5. Fork builds are made on the operator's PC for testing only; not shipped via
+   the BMS-IR launcher. Version string like `0.5.1-bmsir.1`.
+6. Arena connection is OFF by default.
+7. When `replaced` by another client, do not reconnect automatically.
+8. During the foundation, the server refuses BMZ in rated play and unsupported
+   room settings.
+9. 7KEY only at first.

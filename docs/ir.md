@@ -313,6 +313,7 @@ POST /api/v1/scores?include=rankings&ranking_scopes=global,self_and_rivals&ranki
 - `rule.ln_policy`は、プロファイルの設定と譜面のLN情報からBMZが正規化した値で、ランキング・best・集計の単位に使います。`rule.effective_ln_mode`は実際に降らせたLNの種別を示す補助情報です。`chart.ln_profile`はサーバーが譜面情報を補完・検証するための参考情報で、bestを分ける単位にはしません。
 - `play_options.double_option`はランキングを分ける単位で、`off` / `battle` / `battle_auto_scratch`のどれかです（`flip`は`off`として扱います）。実際に適用したDPオプションは`applied_double_option`（`off` / `flip` / `battle` / `battle_auto_scratch`）に入れ、個別のスコアの履歴に残します。
 - `play_options.option`は初期のpayloadとの互換用で、`arrange_1p`と同じ値です。
+- `play_options.floating_hispeed`（真偽値）は、そのプレイ中（状態がPlayingの間）にFloating HSが1度でも有効だったかを示す表示用の印です。READY中だけの場合は`false`です。途中で基準方式へ戻しても`true`のままで、コースではどれか1曲が`true`なら`true`です。ランキング・ランプ・スコアの受け付け条件には使わず、手元の`score.db`には保存しません。ローカル履歴からのbackfillには含めません。
 - `seed` / `random_seed`は10進数の文字列で送ります。数値も過去のpayloadとの互換のために受け付けます。
 - `result.ghost`には、通常のプレイでbeatoraja形式のghostを入れます。
 - `gauge`は、保存値・返却値を`AssistEasy` / `Easy` / `Normal` / `Hard` / `ExHard` / `Hazard` / `Class` / `ExClass` / `ExHardClass`にそろえます。小文字や旧名称も受け付けます。

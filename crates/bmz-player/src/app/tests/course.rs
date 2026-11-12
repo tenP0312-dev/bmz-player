@@ -76,6 +76,7 @@ fn course_result_summary_for_skin_uses_aggregate_course_values() {
     fn entry_summary(ex_score: u32, notes: u32, max_combo: u32, duration_ms: i32) -> ResultSummary {
         ResultSummary {
             last_played_at: None,
+            fail_measure: None,
             chart_md5: None,
             chart_sha256: None,
             clear_type: ClearType::NoPlay,

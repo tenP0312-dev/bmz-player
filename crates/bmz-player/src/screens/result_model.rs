@@ -25,6 +25,8 @@ pub struct ResultSummary {
     pub chart_sha256: Option<[u8; 32]>,
     /// This saved attempt's time, not the previous best. None for unsaved modes.
     pub last_played_at: Option<i64>,
+    /// FAILED で終わったときの、落ちた小節の番号（skin number 379）。
+    pub fail_measure: Option<u32>,
     pub clear_type: ClearType,
     pub skin_attempt: bmz_render::snapshot::SkinAttemptState,
     /// text ref 1 に渡すプレイ時ライバル/ターゲット名。
@@ -166,6 +168,7 @@ impl ResultSummary {
             chart_md5: Some(chart.identity.file_md5),
             chart_sha256: Some(chart.identity.file_sha256),
             last_played_at: None,
+            fail_measure: None,
             skin_attempt: bmz_render::snapshot::SkinAttemptState {
                 effective_key_mode: Some(metadata.key_mode),
                 ln_mode_index: Some(crate::skin_extension::long_note_mode_index(

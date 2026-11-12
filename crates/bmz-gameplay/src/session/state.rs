@@ -318,7 +318,27 @@ pub struct GameSession {
     pub last_hcn_gauge_at: Option<TimeUs>,
 }
 
+/// `time` 以前で最後の小節線の小節番号。`bar_lines` は時刻順を前提とする。
+pub(crate) fn measure_at_time(
+    bar_lines: &[bmz_chart::model::BarLine],
+    time: TimeUs,
+) -> Option<u32> {
+    let end = bar_lines.partition_point(|line| line.time <= time);
+    end.checked_sub(1).map(|index| bar_lines[index].measure)
+}
+
 impl GameSession {
+    /// FAILED で終わったときに、落ちた時点がある小節番号（譜面の小節番号そのまま）。
+    ///
+    /// 確定時刻以前で最後の小節線の番号を返す。FAILED 以外、確定前、小節線が無い譜面は `None`。
+    pub fn failed_measure(&self) -> Option<u32> {
+        if self.state != PlayState::Failed {
+            return None;
+        }
+        let settled_at = self.result_settled_at()?;
+        measure_at_time(&self.chart.bar_lines, settled_at)
+    }
+
     /// 採用する結果の確定時刻。採点を閉じていない `Playing` の間は `None`。
     ///
     /// 更新を経ずに終了状態へ置かれたセッションは、現在の譜面時刻を停止境界とする。

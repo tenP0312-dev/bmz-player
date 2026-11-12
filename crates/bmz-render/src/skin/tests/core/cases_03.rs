@@ -695,3 +695,28 @@ fn skin_image_index_number_separates_colliding_value_refs() {
     assert_eq!(skin_image_index_number(400, &state), Some(0));
     assert_eq!(skin_state_number(400, &state), Some(3));
 }
+
+#[test]
+fn ed_score_date_and_fail_measure_numbers_378_379() {
+    let mut state = SkinDrawState::default();
+    // No score and no failure: both stay blank.
+    assert_eq!(skin_state_number(378, &state), None);
+    assert_eq!(skin_state_number(379, &state), None);
+
+    // Result: the saved attempt's time is the score date.
+    state.last_played_at = Some(1_700_000_000);
+    assert_eq!(skin_state_number(378, &state), Some(1_700_000_000));
+    // Select: the BEST score time wins over the chart's last play time.
+    state.score_date_sec = 1_600_000_000;
+    assert_eq!(skin_state_number(378, &state), Some(1_600_000_000));
+    // A value that does not fit the 32-bit number is blank, not wrapped.
+    state.score_date_sec = i64::from(i32::MAX) + 1;
+    assert_eq!(skin_state_number(378, &state), None);
+
+    state.fail_measure = Some(0);
+    assert_eq!(skin_state_number(379, &state), Some(0));
+    state.fail_measure = Some(37);
+    assert_eq!(skin_state_number(379, &state), Some(37));
+    // The IR ranking numbers keep their own range.
+    assert_eq!(skin_state_number(380, &state), None);
+}

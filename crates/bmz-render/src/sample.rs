@@ -224,6 +224,7 @@ pub fn sample_result_scene() -> AppSceneSnapshot {
         chart_sha256: None,
         screen_size: [0, 0],
         last_played_at: None,
+        fail_measure: None,
         lr2_progress: Default::default(),
         operating_time_ms: 12_345,
         player_name: "Sample Player".to_string(),

@@ -420,3 +420,22 @@ fn practice_round_end_finishes_a_run_whose_notes_were_all_processed() {
     assert_eq!(session.state, PlayState::Failed);
     assert!(session.manually_stopped);
 }
+
+#[test]
+fn measure_at_time_picks_the_last_bar_line_not_after_the_time() {
+    use bmz_chart::model::BarLine;
+    use bmz_core::time::{ChartTick, TimeUs};
+
+    let bar = |measure: u32, time: i64| BarLine {
+        measure,
+        tick: ChartTick(u64::from(measure) * 960),
+        time: TimeUs(time),
+    };
+    let lines = [bar(0, 0), bar(1, 2_000_000), bar(2, 4_000_000)];
+    assert_eq!(super::super::state::measure_at_time(&lines, TimeUs(-1)), None);
+    assert_eq!(super::super::state::measure_at_time(&lines, TimeUs(0)), Some(0));
+    assert_eq!(super::super::state::measure_at_time(&lines, TimeUs(3_999_999)), Some(1));
+    assert_eq!(super::super::state::measure_at_time(&lines, TimeUs(4_000_000)), Some(2));
+    assert_eq!(super::super::state::measure_at_time(&lines, TimeUs(99_000_000)), Some(2));
+    assert_eq!(super::super::state::measure_at_time(&[], TimeUs(0)), None);
+}

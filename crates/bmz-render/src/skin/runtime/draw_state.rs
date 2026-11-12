@@ -113,6 +113,8 @@ pub struct SkinDrawState {
     pub player_stats: PlayerStatsSnapshot,
     pub score_date_sec: i64,
     pub last_played_at: Option<i64>,
+    /// Result の落ちた小節番号。number 379。
+    pub fail_measure: Option<u32>,
     pub course_result: CourseResultSkinSnapshot,
     pub gauge: f32,
     pub gauge_type: i32,
@@ -592,6 +594,7 @@ impl Default for SkinDrawState {
             player_stats: PlayerStatsSnapshot::default(),
             score_date_sec: 0,
             last_played_at: None,
+            fail_measure: None,
             course_result: CourseResultSkinSnapshot::default(),
             gauge: 0.0,
             gauge_type: 2,

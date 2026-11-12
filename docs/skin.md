@@ -778,6 +778,8 @@ beatorajaの名前を優先します。現在は[BMZ Chart Text Refs](#bmz-chart
 | 247 | `lastplay_hour` | 時、0..23 |
 | 248 | `lastplay_minute` | 分、0..59 |
 | 249 | `lastplay_second` | 秒、0..59 |
+| 378 | `score_date`（LR2oraja Endless Dream） | スコアの日時のUnix秒です。SelectはBESTスコアの日時、Resultは今回保存した日時です。1..2147483647、欠損は非表示です |
+| 379 | `fail_measure`（LR2oraja Endless Dream） | FAILEDで終わったときの、落ちた時点の小節番号です（譜面の小節番号のまま）。FAILED以外は欠損で非表示です |
 
 Selectでは選択中の譜面またはコースの最終保存プレイ日時を返します。BEST更新が
 なくても更新し、Failedや履歴を作らないclear-only保存も含みます。Resultでは

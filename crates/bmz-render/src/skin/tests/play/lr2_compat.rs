@@ -58,10 +58,12 @@ fn lr2_number_animation_uses_consecutive_frames_and_cache_tracks_cycle() {
 }
 
 #[test]
-fn lr2_number_format_hides_unsigned_negatives_and_preserves_alignment_and_overflow() {
+fn lr2_number_format_draws_absolute_value_for_unsigned_negatives_and_preserves_alignment_and_overflow()
+ {
     let mut value =
         SkinValueDef { lr2_number: true, divx: 11, divy: 1, digit: 3, ..Default::default() };
-    assert_eq!(lr2_number_digits(&value, -1, 0), None);
+    assert_eq!(lr2_number_digits(&value, -1, 0), Some(vec![10, 10, 1]));
+    assert_eq!(lr2_number_digits(&value, -1234, 0), Some(vec![2, 3, 4]));
     assert_eq!(lr2_number_digits(&value, 7, 0), Some(vec![10, 10, 7]));
     assert_eq!(lr2_number_digits(&value, 7, 1), Some(vec![7, 10, 10]));
     assert_eq!(lr2_number_digits(&value, 1234, 0), Some(vec![2, 3, 4]));

@@ -295,10 +295,8 @@ macro_rules! skin_document_render_play_judge_methods {
             };
             let divx = value.divx.max(1);
             let divy = value.divy.max(1);
-            if value.lr2_number
-                && (lr2_number_frame_cells(value).is_none()
-                    || (number < 0 && !value_layout_is_signed(value)))
-            {
+            // LR2 numbers without minus cells draw the absolute value of a negative number.
+            if value.lr2_number && lr2_number_frame_cells(value).is_none() {
                 return Vec::new();
             }
             let source_width_px =

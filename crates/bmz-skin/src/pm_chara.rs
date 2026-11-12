@@ -297,24 +297,44 @@ impl<'a> RuntimeBuilder<'a> {
             };
             let Some(source_path) = source_path else { continue };
             let source_id = self.source_id(source_path);
-            let frames = build_frames(layer, parsed, runtime.canvas_width, runtime.canvas_height);
-            if frames.is_empty() {
-                continue;
-            }
-            let frame_ms =
+            let base_frame_ms =
                 parsed.frame_ms.get(&layer.motion).copied().unwrap_or(parsed.anime).max(1);
-            let count = frames.len();
+            let base_count = pairs(&layer.regions).count() as i32;
             let mut loop_index = parsed.loop_index.get(&layer.motion).copied().unwrap_or(-1);
-            if loop_index >= count as i32 - 1 {
-                loop_index = count as i32 - 2;
+            if loop_index >= base_count - 1 {
+                loop_index = base_count - 2;
             } else if loop_index < -1 {
                 loop_index = -1;
+            }
+            let split = subdivision_count(layer, base_frame_ms);
+            let built = build_frames(
+                layer,
+                parsed,
+                runtime.canvas_width,
+                runtime.canvas_height,
+                split as usize,
+            );
+            let (frames, aborted) = match built {
+                Some(frames) => (frames, false),
+                None => (Vec::new(), true),
+            };
+            if aborted {
+                // `--` that runs to the end of a string stops the whole character load;
+                // layers built so far stay.
+                tracing::warn!(
+                    motion = layer.motion,
+                    "PMchara `--` runs to the end of a string; stopping the load"
+                );
+                break;
+            }
+            if frames.is_empty() {
+                continue;
             }
             runtime.motions.push(SkinPmCharaMotionLayerDef {
                 motion: layer.motion,
                 source_id,
-                frame_ms,
-                loop_start: (loop_index + 1).max(0) as usize,
+                frame_ms: base_frame_ms / split,
+                loop_start: ((loop_index + 1).max(0) * split) as usize,
                 frames,
             });
         }
@@ -394,53 +414,126 @@ fn selected_path(paths: &[Option<String>; 2], color: i32) -> Option<&str> {
     if color == 2 { paths[1].as_deref().or(paths[0].as_deref()) } else { paths[0].as_deref() }
 }
 
+/// 位置・不透明度・回転のどれかに `-` があり、1 コマが 17ms 以上なら、1 コマを分ける数。
+///
+/// 1 コマの時間を割り切れ、分けた 1 つが 17ms 未満になる最小の数（仕様 3.6）。
+fn subdivision_count(layer: &RawLayer, frame_ms: i32) -> i32 {
+    let has_dash =
+        [&layer.destinations, &layer.alpha, &layer.angle].iter().any(|series| series.contains('-'));
+    if !has_dash || frame_ms < 17 {
+        return 1;
+    }
+    (1..=frame_ms).find(|k| frame_ms % k == 0 && frame_ms / k < 17).unwrap_or(1)
+}
+
+/// `--` の区間を前後の値の等間隔で埋める。区間が末尾まで続くと `None`。
+///
+/// 値は 1 つの列に並び、区間の前に値が無いときは `before_first` を前の値とする。
+fn fill_dashes<T: Copy>(
+    codes: &[&str],
+    value_of: impl Fn(&str) -> T,
+    before_first: T,
+    lerp: impl Fn(T, T, i64, i64) -> T,
+) -> Option<Vec<T>> {
+    let mut out: Vec<T> = Vec::with_capacity(codes.len());
+    let mut previous = before_first;
+    let mut run = 0usize;
+    for code in codes {
+        if *code == "--" {
+            run += 1;
+            continue;
+        }
+        let value = value_of(code);
+        for step in 0..run {
+            out.push(lerp(previous, value, step as i64 + 1, run as i64 + 1));
+        }
+        run = 0;
+        out.push(value);
+        previous = value;
+    }
+    (run == 0).then_some(out)
+}
+
+fn repeat_codes<'a>(codes: &[&'a str], times: usize) -> Vec<&'a str> {
+    codes.iter().flat_map(|code| std::iter::repeat_n(*code, times)).collect()
+}
+
+fn lerp_int(from: i32, to: i32, step: i64, total: i64) -> i32 {
+    (i64::from(from) + (i64::from(to) - i64::from(from)) * step / total) as i32
+}
+
+fn lerp_rect(from: IntRect, to: IntRect, step: i64, total: i64) -> IntRect {
+    IntRect {
+        x: lerp_int(from.x, to.x, step, total),
+        y: lerp_int(from.y, to.y, step, total),
+        w: lerp_int(from.w, to.w, step, total),
+        h: lerp_int(from.h, to.h, step, total),
+    }
+}
+
+/// 1 層のコマを作る。`--` が末尾まで続く文字列があれば `None`（読み込みを止める合図）。
 fn build_frames(
     layer: &RawLayer,
     parsed: &ParsedChp,
     canvas_width: i32,
     canvas_height: i32,
-) -> Vec<SkinPmCharaFrameDef> {
+    split: usize,
+) -> Option<Vec<SkinPmCharaFrameDef>> {
     let region_codes = pairs(&layer.regions).collect::<Vec<_>>();
     if region_codes.is_empty() {
-        return Vec::new();
+        return Some(Vec::new());
     }
-    let destination_codes = pairs(&layer.destinations).collect::<Vec<_>>();
-    let alpha_codes = pairs(&layer.alpha).collect::<Vec<_>>();
-    let angle_codes = pairs(&layer.angle).collect::<Vec<_>>();
-    region_codes
-        .iter()
-        .enumerate()
-        .map(|(index, code)| {
-            let source = parse_pair(code, 36)
-                .and_then(|code| parsed.regions.get(&code).copied())
-                .unwrap_or_default();
-            let destination = destination_codes
-                .get(index)
-                .and_then(|code| parse_pair(code, 36))
-                .and_then(|code| parsed.regions.get(&code).copied())
-                .unwrap_or(IntRect { x: 0, y: 0, w: canvas_width, h: canvas_height });
-            let alpha = alpha_codes
-                .get(index)
-                .and_then(|code| parse_pair(code, 16))
-                .map_or(255, |value| value.min(255) as i32);
-            let angle = angle_codes
-                .get(index)
-                .and_then(|code| parse_pair(code, 16))
-                .map_or(0, |value| (value.min(255) as f32 * 360.0 / 256.0).round() as i32);
-            SkinPmCharaFrameDef {
-                source_x: source.x,
-                source_y: source.y,
-                source_w: source.w,
-                source_h: source.h,
-                destination_x: destination.x,
-                destination_y: destination.y,
-                destination_w: destination.w,
-                destination_h: destination.h,
-                alpha,
-                angle,
-            }
-        })
-        .collect()
+    let full = IntRect { x: 0, y: 0, w: canvas_width, h: canvas_height };
+    let destination_codes = repeat_codes(&pairs(&layer.destinations).collect::<Vec<_>>(), split);
+    let alpha_codes = repeat_codes(&pairs(&layer.alpha).collect::<Vec<_>>(), split);
+    let angle_codes = repeat_codes(&pairs(&layer.angle).collect::<Vec<_>>(), split);
+    let destinations = fill_dashes(
+        &destination_codes,
+        |code| {
+            parse_pair(code, 36).and_then(|code| parsed.regions.get(&code).copied()).unwrap_or(full)
+        },
+        full,
+        lerp_rect,
+    )?;
+    let alphas = fill_dashes(
+        &alpha_codes,
+        |code| parse_pair(code, 16).map_or(255, |value| value.min(255) as i32),
+        0,
+        lerp_int,
+    )?;
+    let angles = fill_dashes(
+        &angle_codes,
+        |code| parse_pair(code, 16).map_or(0, |value| value.min(255) as i32),
+        0,
+        lerp_int,
+    )?;
+    let count = region_codes.len() * split;
+    Some(
+        (0..count)
+            .map(|index| {
+                let source = parse_pair(region_codes[index / split], 36)
+                    .and_then(|code| parsed.regions.get(&code).copied())
+                    .unwrap_or_default();
+                let destination = destinations.get(index).copied().unwrap_or(full);
+                let alpha = alphas.get(index).copied().unwrap_or(255);
+                let angle = angles
+                    .get(index)
+                    .map_or(0, |value| (*value as f32 * 360.0 / 256.0).round() as i32);
+                SkinPmCharaFrameDef {
+                    source_x: source.x,
+                    source_y: source.y,
+                    source_w: source.w,
+                    source_h: source.h,
+                    destination_x: destination.x,
+                    destination_y: destination.y,
+                    destination_w: destination.w,
+                    destination_h: destination.h,
+                    alpha,
+                    angle,
+                }
+            })
+            .collect(),
+    )
 }
 
 fn motion_for_type(chara_type: i32) -> Option<i32> {
@@ -522,5 +615,56 @@ mod tests {
             (4, 5, 60, 70)
         );
         assert_eq!((loaded.runtime.canvas_width, loaded.runtime.canvas_height), (60, 70));
+    }
+
+    #[test]
+    fn dash_runs_are_filled_evenly_and_frames_are_subdivided() {
+        let root = test_dir("bmz-pmchara-dash");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("character.png"), []).unwrap();
+        // Frame time 100ms -> 10 sub frames of 10ms. Two images, position 01 -> 02 with `--`.
+        fs::write(
+            root.join("sample.chp"),
+            b"#CharBMP character.png\n#Anime 100\n#Size 100 100\n#00 0 0 10 10\n#01 0 0 100 100\n#02 30 0 100 100\n#Pattern 01 00000000 01----02\n",
+        )
+        .unwrap();
+        let loaded = load_pm_chara(&root, "pm", 0, 1).unwrap();
+        let motion = &loaded.runtime.motions[0];
+        assert_eq!(motion.frame_ms, 10);
+        assert_eq!(motion.loop_start, 0);
+        assert_eq!(motion.frames.len(), 40);
+        let x = |index: usize| motion.frames[index].destination_x;
+        assert_eq!((x(0), x(9)), (0, 0));
+        assert_eq!((x(10), x(29)), (1, 28));
+        assert_eq!((x(30), x(39)), (30, 30));
+    }
+
+    #[test]
+    fn dash_interpolation_truncates_and_trailing_dash_stops_the_load() {
+        let regions = ["01", "--", "--", "02"];
+        let values =
+            fill_dashes(&regions, |code| if code == "01" { 0 } else { 10 }, 0, lerp_int).unwrap();
+        assert_eq!(values, vec![0, 3, 6, 10]);
+        // No value before the run: alpha-like series start from 0.
+        let leading = fill_dashes(&["--", "--", "ff"], |_| 255, 0, lerp_int).unwrap();
+        assert_eq!(leading, vec![85, 170, 255]);
+        // A run that reaches the end has no closing value.
+        assert!(fill_dashes(&["01", "--"], |_| 1, 0, lerp_int).is_none());
+    }
+
+    #[test]
+    fn subdivision_count_matches_the_spec_examples() {
+        let layer = |dest: &str| RawLayer {
+            kind: LayerKind::Pattern,
+            motion: 1,
+            regions: "00".into(),
+            destinations: dest.into(),
+            alpha: String::new(),
+            angle: String::new(),
+        };
+        assert_eq!(subdivision_count(&layer("01--02"), 100), 10);
+        assert_eq!(subdivision_count(&layer("01--02"), 51), 17);
+        assert_eq!(subdivision_count(&layer("0102"), 100), 1);
+        assert_eq!(subdivision_count(&layer("01--02"), 16), 1);
     }
 }

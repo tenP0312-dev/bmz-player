@@ -146,7 +146,7 @@ timerの単位・OFF値・書き込み制約・失敗時の値は[skin.md](skin.
 | beatoraja最新版のLua API | `file_*`はメモリ上のスキンファイルで対応します（ModernChic Ver 4.71のローテーション等）。HTTP通信 / `open_url`は未対応です。非同期HTTPの`http_get_async` / `http_poll` / `http_cancel`はbeatorajaの通信無効時と同じ失敗値を返し、SocialSkinの無限待ちを防ぎます。実通信・ディスクへの書き込みは行いません。[Lua APIの互換範囲](skin.md#lua-apiの互換範囲)、[回帰テスト](../crates/bmz-skin/src/tests/lua_disabled_http.rs) |
 | LuaJとLua 5.4の差 | 整数値floatの`tostring`、`string.format("%d")`の小数、`os.date`の既定書式と未知指定子は差が残ります。数値callbackの`nil`はBMZでは未取得、LuaJの`toint()` / `tofloat()`では0です。[仕様](skin.md#lua-apiの互換範囲) |
 | function診断 | field path付きwarningやcustom timerのID付き診断はあります。object ID・Lua source file / lineの一貫した提示は改善余地がある |
-| PMchara | `--`座標補間と右下pixel色によるchroma keyは未対応です。通常のalphaは対応します。[詳細仕様](skin.md) |
+| PMchara | `--`補間とコマの細分化、LR2 CSVの`PM_CHARA`命令に対応します。右下pixel色によるchroma keyとタイマー900..909の個別の動きは未対応です。通常のalphaは対応します。[詳細仕様](skin.md) |
 
 「未対応Lua timer」のような一括表現は避け、custom timerとdestination timer、
 ロード時推論とruntime評価を分けて記載します。

@@ -139,31 +139,30 @@ impl WinitApp {
 mod tests {
     use super::*;
 
-    fn logged_in_rian_profile() -> ProfileConfig {
+    fn logged_in_bms_ir_profile() -> ProfileConfig {
         let mut profile = ProfileConfig::new_default("test", "Test", 0);
         let provider = profile
             .ir
             .providers
             .iter_mut()
-            .find(|provider| crate::ir::rian_ir::is_rian_ir_provider(&provider.provider))
+            .find(|provider| crate::ir::bms_ir::is_bms_ir_provider(&provider.provider))
             .unwrap();
-        provider.provider_key = "rian-ir".to_string();
-        provider.base_url = "https://rian.example.test/".to_string();
+        provider.provider_key = crate::ir::bms_ir::BMS_IR_PROVIDER.to_string();
         provider.enabled = true;
         provider.account_id = "player-1".to_string();
-        profile.ir.primary_provider = "rian-ir".to_string();
+        profile.ir.primary_provider = crate::ir::bms_ir::BMS_IR_PROVIDER.to_string();
         profile
     }
 
     #[test]
-    fn startup_rival_sync_uses_logged_in_primary_rian_ir() {
-        let profile = logged_in_rian_profile();
+    fn startup_rival_sync_uses_logged_in_primary_bms_ir() {
+        let profile = logged_in_bms_ir_profile();
 
         assert_eq!(
             RianRivalSyncRequest::from_profile(&profile),
             Some(RianRivalSyncRequest {
-                provider_key: "rian-ir".to_string(),
-                base_url: "https://rian.example.test/".to_string(),
+                provider_key: crate::ir::bms_ir::BMS_IR_PROVIDER.to_string(),
+                base_url: crate::ir::bms_ir::BMS_IR_DEFAULT_BASE_URL.to_string(),
                 account_id: "player-1".to_string(),
             })
         );
@@ -171,30 +170,16 @@ mod tests {
 
     #[test]
     fn startup_rival_sync_requires_a_logged_in_account() {
-        let mut profile = logged_in_rian_profile();
-        let provider = profile
-            .ir
-            .providers
-            .iter_mut()
-            .find(|provider| crate::ir::rian_ir::is_rian_ir_provider(&provider.provider))
-            .unwrap();
-        provider.account_id.clear();
+        let mut profile = logged_in_bms_ir_profile();
+        profile.ir.providers[0].account_id.clear();
 
         assert!(RianRivalSyncRequest::from_profile(&profile).is_none());
     }
 
     #[test]
-    fn startup_rival_sync_ignores_non_primary_rian_ir() {
-        let mut profile = logged_in_rian_profile();
-        let bmz = profile
-            .ir
-            .providers
-            .iter_mut()
-            .find(|provider| !crate::ir::rian_ir::is_rian_ir_provider(&provider.provider))
-            .unwrap();
-        bmz.provider_key = "bmz".to_string();
-        bmz.enabled = true;
-        profile.ir.primary_provider = "bmz".to_string();
+    fn startup_rival_sync_ignores_a_disabled_provider() {
+        let mut profile = logged_in_bms_ir_profile();
+        profile.ir.providers[0].enabled = false;
 
         assert!(RianRivalSyncRequest::from_profile(&profile).is_none());
     }

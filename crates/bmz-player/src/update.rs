@@ -127,6 +127,10 @@ pub fn startup_guard() -> Result<Option<Vec<File>>> {
 }
 
 pub async fn check_for_update(channel: UpdateChannelConfig) -> Result<Option<UpdateCandidate>> {
+    ensure!(
+        crate::fork_policy::ONLINE_UPDATES_ENABLED,
+        "update check is disabled in this build (BMS-IR fork)"
+    );
     let client = client()?;
     let Some(mut release) = fetch_release_for_channel(&client, channel).await? else {
         return Ok(None);
@@ -286,6 +290,10 @@ pub async fn download_update(
     cache_dir: &Path,
     progress: Arc<DownloadProgress>,
 ) -> Result<DownloadedUpdate> {
+    ensure!(
+        crate::fork_policy::ONLINE_UPDATES_ENABLED,
+        "update download is disabled in this build (BMS-IR fork)"
+    );
     download_update_with_client(candidate, cache_dir, progress, &client()?).await
 }
 

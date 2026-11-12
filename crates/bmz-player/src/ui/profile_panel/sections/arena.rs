@@ -83,6 +83,14 @@ pub(in crate::ui::profile_panel) fn build_profile_arena_section(
                         "rtt" => format!("{:.0}", round_trip * 1000.0)
                     ));
                 }
+                if let Some(player) = panel.player {
+                    if let Some(rating) = player.rating {
+                        ui.label(tr!(text, "arena-rating", "rating" => rating));
+                    }
+                    if let Some(matches) = player.matches_played {
+                        ui.label(tr!(text, "arena-matches-played", "count" => matches));
+                    }
+                }
                 if panel.active_match_id.is_some() {
                     ui.label(tr!(text, "arena-active-match"));
                 }

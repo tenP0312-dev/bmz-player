@@ -142,7 +142,30 @@ fn error_replaced_and_status_are_read() {
     assert_eq!(parse_server_message(r#"{"type":"replaced"}"#).unwrap(), ServerMessage::Replaced);
     assert_eq!(
         parse_server_message(r#"{"type":"arena_status","queue":[],"extra":1}"#).unwrap(),
-        ServerMessage::ArenaStatus
+        ServerMessage::ArenaStatus(Default::default())
+    );
+}
+
+#[test]
+fn arena_status_reads_rating_and_matches_played_and_ignores_the_rest() {
+    use super::PlayerStatus;
+    let text = r#"{"type":"arena_status","player":{"rating":1523,"rating_exact":1522.6,
+        "matches_played":42,"season":{"id":3,"name":"s"},"new_field":[1]},
+        "waiting_players":[],"ranking":[],"public_rooms":[],"lobby_chat":[]}"#;
+    assert_eq!(
+        parse_server_message(text).unwrap(),
+        ServerMessage::ArenaStatus(PlayerStatus { rating: Some(1523), matches_played: Some(42) })
+    );
+    // Mistyped or missing fields are ignored individually.
+    let text = r#"{"type":"arena_status","player":{"rating":"high","matches_played":7}}"#;
+    assert_eq!(
+        parse_server_message(text).unwrap(),
+        ServerMessage::ArenaStatus(PlayerStatus { rating: None, matches_played: Some(7) })
+    );
+    let text = r#"{"type":"arena_status","player":null}"#;
+    assert_eq!(
+        parse_server_message(text).unwrap(),
+        ServerMessage::ArenaStatus(PlayerStatus::default())
     );
 }
 

@@ -8,7 +8,7 @@
 use std::collections::VecDeque;
 use std::time::Duration;
 
-use super::protocol::{ClientMessage, Hello, ScreenState, ServerMessage};
+use super::protocol::{ClientMessage, Hello, PlayerStatus, ScreenState, ServerMessage};
 
 /// `ping` every 5 seconds.
 pub const PING_INTERVAL: Duration = Duration::from_secs(5);
@@ -122,6 +122,8 @@ pub struct ArenaPanelState {
     /// A match the server says is in progress (shown only; B1 cannot rejoin it).
     pub active_match_id: Option<String>,
     pub notice: Option<Notice>,
+    /// The player's own rating from the latest `arena_status`.
+    pub player: Option<PlayerStatus>,
     pub last_disconnect: Option<DisconnectReason>,
     /// Wall-clock time of the next reconnect attempt, while `Reconnecting`.
     pub retry_at_unix: Option<f64>,
@@ -174,6 +176,7 @@ pub struct ArenaSession {
     session_id: Option<String>,
     active_match_id: Option<String>,
     notice: Option<Notice>,
+    player: Option<PlayerStatus>,
     last_disconnect: Option<DisconnectReason>,
     disconnected_since: Option<Duration>,
     retry_at: Option<(Duration, f64)>,
@@ -200,6 +203,7 @@ impl ArenaSession {
             session_id: None,
             active_match_id: None,
             notice: None,
+            player: None,
             last_disconnect: None,
             disconnected_since: None,
             retry_at: None,
@@ -240,6 +244,7 @@ impl ArenaSession {
             round_trip_secs: self.round_trip,
             active_match_id: self.active_match_id.clone(),
             notice: self.notice.clone(),
+            player: self.player,
             last_disconnect: self.last_disconnect,
             retry_at_unix: self.retry_at.map(|(_, unix)| unix),
         }
@@ -332,7 +337,10 @@ impl ArenaSession {
                 self.retry_at = None;
                 vec![Action::Close]
             }
-            ServerMessage::ArenaStatus => Vec::new(),
+            ServerMessage::ArenaStatus(player) => {
+                self.player = Some(player);
+                Vec::new()
+            }
             ServerMessage::Unknown(kind) => {
                 self.unknown_messages += 1;
                 tracing::debug!(%kind, "ignored unknown arena message");
@@ -419,6 +427,7 @@ impl ArenaSession {
         self.last_disconnect = Some(reason);
         self.session_id = None;
         self.active_match_id = None;
+        self.player = None;
         self.retry_at = Some((now.mono + delay, now.unix + delay.as_secs_f64()));
     }
 }

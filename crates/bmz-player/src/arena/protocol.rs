@@ -99,6 +99,15 @@ pub struct HelloOk {
     pub server_time: Option<f64>,
 }
 
+/// `arena_status.player`: the fields the panel shows. Missing or mistyped
+/// fields stay `None`; unknown fields (`rating_exact`, `season`, ...) are ignored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PlayerStatus {
+    /// Rounded rating (integer).
+    pub rating: Option<i64>,
+    pub matches_played: Option<u64>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ServerMessage {
     HelloOk(HelloOk),
@@ -111,8 +120,9 @@ pub enum ServerMessage {
         message: String,
     },
     Replaced,
-    /// Lobby snapshot. B1 only needs to know it arrived.
-    ArenaStatus,
+    /// Lobby snapshot. Only the player's own rating is read; other fields
+    /// (`waiting_players`, `ranking`, `public_rooms`, `lobby_chat`) are for later stages.
+    ArenaStatus(PlayerStatus),
     /// Any other (or later-stage) message type.
     Unknown(String),
 }
@@ -141,7 +151,15 @@ pub fn parse_server_message(text: &str) -> Result<ServerMessage, serde_json::Err
         },
         "error" => ServerMessage::Error { code: string("code"), message: string("message") },
         "replaced" => ServerMessage::Replaced,
-        "arena_status" => ServerMessage::ArenaStatus,
+        "arena_status" => {
+            let player = object.get("player").and_then(Value::as_object);
+            ServerMessage::ArenaStatus(PlayerStatus {
+                rating: player.and_then(|p| p.get("rating")).and_then(Value::as_i64),
+                matches_played: player
+                    .and_then(|p| p.get("matches_played"))
+                    .and_then(Value::as_u64),
+            })
+        }
         other => ServerMessage::Unknown(other.to_owned()),
     })
 }

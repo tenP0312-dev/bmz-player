@@ -132,7 +132,7 @@ fn pong_for_an_unknown_ping_is_ignored() {
 fn idle_for_twenty_seconds_closes_and_schedules_a_reconnect() {
     let mut session = connected(ScreenState::Select);
     // Traffic keeps the connection alive.
-    session.handle(at(15.0), Event::Message(ServerMessage::ArenaStatus));
+    session.handle(at(15.0), Event::Message(ServerMessage::ArenaStatus(Default::default())));
     assert!(sent(&session.handle(at(34.0), Event::Tick)).len() <= 1);
     assert_eq!(session.phase(), Phase::Connected);
 
@@ -315,4 +315,16 @@ fn default_timing_matches_the_specification() {
     assert_eq!(timing.idle_timeout, Duration::from_secs(20));
     assert_eq!(timing.reconnect_delay, Duration::from_secs(5));
     assert_eq!(timing.reconnect_grace, Duration::from_secs(30));
+}
+
+#[test]
+fn arena_status_player_is_kept_until_the_connection_drops() {
+    use crate::arena::protocol::PlayerStatus;
+    let mut session = connected(ScreenState::Select);
+    assert_eq!(session.panel().player, None);
+    let player = PlayerStatus { rating: Some(1500), matches_played: Some(12) };
+    session.handle(at(1.0), Event::Message(ServerMessage::ArenaStatus(player)));
+    assert_eq!(session.panel().player, Some(player));
+    session.handle(at(2.0), Event::SocketClosed);
+    assert_eq!(session.panel().player, None);
 }

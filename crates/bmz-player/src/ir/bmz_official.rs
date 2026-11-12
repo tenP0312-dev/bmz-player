@@ -60,6 +60,7 @@ impl BmzOfficialIrClient {
 
     /// ログイン前 (token なし) のクライアント。`login` / `refresh` / 匿名 ranking 用。
     pub fn anonymous(base_url: &str) -> Result<Self> {
+        crate::fork_policy::ensure_ir_origin_allowed(base_url, "BMZ IR")?;
         Ok(Self {
             base_url: parse_base_url(base_url)?,
             access_token: None,

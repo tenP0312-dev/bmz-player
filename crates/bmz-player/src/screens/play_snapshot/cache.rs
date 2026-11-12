@@ -47,6 +47,9 @@ pub struct PlayRenderSnapshotCache {
     /// 可視候補だけに絞る。
     pub(super) long_note_prefix_max_end_times: Arc<[i64]>,
     pub(super) bga_events: BgaEventCache,
+    /// READY-only preview of the first hit notes. `None` unless the play launch turned the
+    /// profile option on, so Viewer, video export and Practice never show it.
+    pub(super) ready_first_notes: Option<Arc<super::ready_first_notes::ReadyFirstNotes>>,
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +67,13 @@ pub(super) struct BgaEventCache {
 }
 
 impl PlayRenderSnapshotCache {
+    /// Turns the READY first-notes preview on for this chart (no-op when the chart has no
+    /// hit note, which keeps the normal drawing).
+    pub fn enable_ready_first_notes(&mut self, chart: &PlayableChart) {
+        self.ready_first_notes =
+            super::ready_first_notes::ReadyFirstNotes::from_chart(chart).map(Arc::new);
+    }
+
     pub(crate) fn bga_event_at(&self, kind: BgaEventKind, time: TimeUs) -> Option<&BgaEvent> {
         let events = self.bga_events.events(kind);
         let end = events.partition_point(|event| event.time <= time);
@@ -139,6 +149,7 @@ impl PlayRenderSnapshotCache {
             speed_segments,
             long_note_prefix_max_end_times,
             bga_events,
+            ready_first_notes: None,
         }
     }
 }

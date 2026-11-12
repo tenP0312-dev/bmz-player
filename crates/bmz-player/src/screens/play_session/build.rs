@@ -618,6 +618,7 @@ pub fn build_game_session_with_input_backend(
         audio_mix: audio_mix_from_profile(profile),
         hispeed,
         hispeed_mode,
+        floating_hispeed_used: false,
         base_hispeed_mode: base_hispeed_mode(mode_config.base_hispeed),
         floating_policy: floating_policy(mode_config.floating_policy),
         normal_hispeed_level: crate::config::play::normalize_normal_hispeed_level(

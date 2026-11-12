@@ -625,6 +625,14 @@ define_settings! {
             },
         format: |profile| format_bool_on_off(profile.play.note_retention),
     }
+    ReadyFirstNotes(bool) {
+        value: [field play.ready_first_notes],
+        adjust: |profile, _delta| {
+                profile.play.ready_first_notes = !profile.play.ready_first_notes;
+                true
+            },
+        format: |profile| format_bool_on_off(profile.play.ready_first_notes),
+    }
     ShowLnTailCap(bool) {
         value: [field play.show_ln_tail_cap],
         adjust: |profile, _delta| {

@@ -122,6 +122,8 @@ pub struct PlaySessionOptions {
     /// Preload workers read archive chart assets into memory. Other callers import only the
     /// chart, so the window thread never decodes an archive.
     pub read_archive_assets: bool,
+    /// Profile option: show the first hit notes during READY (display only).
+    pub ready_first_notes: bool,
     /// Per-key presentation settings use the source chart mode. This differs
     /// from `chart.metadata.key_mode` after BATTLE expands 5K/7K to 10K/14K.
     pub play_config_key_mode: Option<KeyMode>,
@@ -414,6 +416,7 @@ impl Default for PlaySessionOptions {
     fn default() -> Self {
         Self {
             read_archive_assets: false,
+            ready_first_notes: false,
             play_config_key_mode: None,
             session_mode: SessionMode::Normal,
             autoplay: false,
@@ -478,6 +481,10 @@ pub(crate) const LEGACY_H_RANDOM_THRESHOLD_MS: u32 = 100;
 mod arrange_algorithm;
 #[path = "play_session/arrange/mirror.rs"]
 mod arrange_mirror;
+// Pure calculation; wired to the Decide -> Play transition in a follow-up change.
+#[allow(dead_code)]
+#[path = "play_session/arrange/one_bass.rs"]
+mod arrange_one_bass;
 #[path = "play_session/arrange/permutation.rs"]
 mod arrange_permutation;
 #[path = "play_session/arrange/pipeline.rs"]
@@ -494,6 +501,11 @@ mod seven_to_six;
 mod sp_to_dp;
 
 pub(crate) use arrange_mirror::{CopiedArrangement, mirror_copied_arrangement};
+#[allow(unused_imports)] // wired to the Decide -> Play transition in a follow-up change
+pub(crate) use arrange_one_bass::{
+    OneBassBase, OneBassSide, one_bass_seed, pressed_target, seed_for_permutation,
+    seed_permutation, source_lane, supports_key_mode,
+};
 pub(crate) use arrange_pipeline::preview_arrange_pattern;
 pub(crate) use arrange_pipeline::second_player_lane_mask;
 pub use arrange_pipeline::{apply_arrange, apply_arrange_pair, generate_arrange_seed};

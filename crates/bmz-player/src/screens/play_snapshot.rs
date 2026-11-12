@@ -44,6 +44,7 @@ mod display;
 mod hispeed_transition;
 mod missed_notes;
 mod projection;
+mod ready_first_notes;
 mod scroll;
 mod state;
 mod timers;

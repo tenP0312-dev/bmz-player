@@ -271,7 +271,7 @@ fn pairs(value: &str) -> impl Iterator<Item = &str> {
 struct RuntimeBuilder<'a> {
     prefix: &'a str,
     base_dir: &'a Path,
-    source_ids: HashMap<PathBuf, String>,
+    source_ids: HashMap<(PathBuf, bool), String>,
     sources: Vec<SkinSourceDef>,
 }
 
@@ -296,7 +296,7 @@ impl<'a> RuntimeBuilder<'a> {
                 LayerKind::Pattern | LayerKind::Layer => selected_path(&parsed.bmp, color),
             };
             let Some(source_path) = source_path else { continue };
-            let source_id = self.source_id(source_path);
+            let source_id = self.source_id(source_path, true);
             let frames = build_frames(layer, parsed, runtime.canvas_width, runtime.canvas_height);
             if frames.is_empty() {
                 continue;
@@ -341,7 +341,8 @@ impl<'a> RuntimeBuilder<'a> {
         };
         let path = path.ok_or_else(|| anyhow!("PMchara image path is missing for type"))?;
         let region = region.unwrap_or(IntRect { x: 0, y: 0, w: -1, h: -1 });
-        let source_id = self.source_id(path);
+        // The icon (`#SelectCG`) keeps its own transparency; the other images use the corner pixel.
+        let source_id = self.source_id(path, !matches!(part, StaticPart::SelectCg));
         runtime.canvas_width = region.w.max(1);
         runtime.canvas_height = region.h.max(1);
         runtime.motions.push(SkinPmCharaMotionLayerDef {
@@ -365,17 +366,18 @@ impl<'a> RuntimeBuilder<'a> {
         Ok(())
     }
 
-    fn source_id(&mut self, relative_path: &str) -> String {
+    fn source_id(&mut self, relative_path: &str, corner_color_key: bool) -> String {
         let path = self.base_dir.join(relative_path.replace('\\', "/"));
-        if let Some(id) = self.source_ids.get(&path) {
+        if let Some(id) = self.source_ids.get(&(path.clone(), corner_color_key)) {
             return id.clone();
         }
         let id = format!("{}:source:{}", self.prefix, self.sources.len());
-        self.source_ids.insert(path.clone(), id.clone());
+        self.source_ids.insert((path.clone(), corner_color_key), id.clone());
         self.sources.push(SkinSourceDef {
             id: id.clone(),
             path: path.to_string_lossy().to_string(),
             lr2_color_key: None,
+            corner_color_key,
         });
         id
     }
@@ -506,6 +508,26 @@ mod tests {
         assert_eq!(motion.loop_start, 2);
         assert_eq!(motion.frames.len(), 3);
         assert_eq!(motion.frames[1].source_x, 10);
+    }
+
+    #[test]
+    fn corner_pixel_transparency_applies_to_character_images_but_not_the_icon() {
+        let root = test_dir("bmz-pmchara-corner-key");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("character.png"), []).unwrap();
+        fs::write(root.join("face.png"), []).unwrap();
+        fs::write(root.join("icon.png"), []).unwrap();
+        fs::write(
+            root.join("sample.chp"),
+            b"#CharBMP character.png\n#CharFace face.png\n#SelectCG icon.png\n#Anime 160\n#Size 20 30\n#00 0 0 10 30\n#01 10 0 10 30\n#Pattern 01 0001\n#FaceUpper 0 0 10 10\n#FaceAll 0 0 20 20\n",
+        )
+        .unwrap();
+        // 0: animation (#CharBMP), 1: background (#CharBMP), 3: upper face (#CharFace), 5: icon.
+        for (chara_type, expected) in [(0, true), (1, true), (3, true), (5, false)] {
+            let loaded = load_pm_chara(&root, "pm", chara_type, 1).unwrap();
+            assert_eq!(loaded.sources.len(), 1, "type {chara_type}");
+            assert_eq!(loaded.sources[0].corner_color_key, expected, "type {chara_type}");
+        }
     }
 
     #[test]

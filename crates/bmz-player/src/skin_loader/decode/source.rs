@@ -90,6 +90,7 @@ pub(in crate::skin_loader) fn skin_source_asset_cache_key(
     let path = asset.logical_path().to_path_buf();
     Some(SkinSourceAssetCacheKey {
         color_key: None,
+        corner_color_key: false,
         path,
         modified: metadata.modified().ok(),
         len: metadata.len(),

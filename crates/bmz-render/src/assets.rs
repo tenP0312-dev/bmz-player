@@ -178,6 +178,22 @@ fn decode_image_rgba(
     Ok(asset)
 }
 
+/// Makes every pixel with exactly the color and alpha of the bottom-right pixel transparent.
+/// Similar colors are kept. Pixels that are already transparent stay transparent.
+pub fn apply_corner_color_key(asset: &mut RgbaImageAsset) {
+    let (width, height) = (asset.width as usize, asset.height as usize);
+    if width == 0 || height == 0 || asset.pixels.len() < width * height * 4 {
+        return;
+    }
+    let corner_start = (width * height - 1) * 4;
+    let corner: [u8; 4] = asset.pixels[corner_start..corner_start + 4].try_into().unwrap();
+    for pixel in asset.pixels.chunks_exact_mut(4) {
+        if pixel == corner {
+            pixel[3] = 0;
+        }
+    }
+}
+
 fn apply_lr2_color_key(rgba: &mut image::RgbaImage, color_key: [u8; 3]) {
     for pixel in rgba.pixels_mut() {
         if pixel.0[..3] == color_key {
@@ -326,6 +342,36 @@ mod tests {
     use flate2::write::ZlibEncoder;
 
     use super::*;
+
+    #[test]
+    fn corner_color_key_clears_only_pixels_identical_to_the_corner() {
+        let mut asset = RgbaImageAsset {
+            width: 2,
+            height: 2,
+            pixels: vec![
+                10, 20, 30, 255, // same as the corner: cleared
+                10, 20, 31, 255, // a near color: kept
+                10, 20, 30, 128, // same color, other alpha: kept
+                10, 20, 30, 255, // the corner
+            ],
+        };
+        apply_corner_color_key(&mut asset);
+        assert_eq!(asset.pixels[3], 0);
+        assert_eq!(asset.pixels[7], 255);
+        assert_eq!(asset.pixels[11], 128);
+        assert_eq!(asset.pixels[15], 0);
+        // RGB is left as it was.
+        assert_eq!(&asset.pixels[..3], &[10, 20, 30]);
+    }
+
+    #[test]
+    fn corner_color_key_ignores_empty_or_short_images() {
+        let mut empty = RgbaImageAsset { width: 0, height: 0, pixels: Vec::new() };
+        apply_corner_color_key(&mut empty);
+        let mut short = RgbaImageAsset { width: 2, height: 2, pixels: vec![1; 4] };
+        apply_corner_color_key(&mut short);
+        assert_eq!(short.pixels, vec![1; 4]);
+    }
 
     #[test]
     fn lr2_color_key_masks_rgb_but_preserves_existing_alpha() {

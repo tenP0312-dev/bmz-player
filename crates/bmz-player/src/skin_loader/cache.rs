@@ -153,6 +153,7 @@ pub struct SkinSourceAssetCache {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SkinSourceAssetCacheKey {
     pub(super) color_key: Option<[u8; 3]>,
+    pub(super) corner_color_key: bool,
     pub(super) path: PathBuf,
     pub(super) modified: Option<SystemTime>,
     pub(super) len: u64,

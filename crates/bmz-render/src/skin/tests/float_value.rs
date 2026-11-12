@@ -184,3 +184,30 @@ fn floatvalue_draws_in_the_select_screen_too() {
         vec![2, 5, 0, 11, 0, 0]
     );
 }
+
+#[test]
+fn floatvalue_shows_result_timing_statistics_in_milliseconds() {
+    let state = SkinDrawState {
+        average_timing_ms: Some(2.5),
+        stddev_timing_ms: Some(1.25),
+        average_duration_us: Some(750_000),
+        ..SkinDrawState::default()
+    };
+    let cells = |ref_id: i32| -> Vec<i32> {
+        let document = float_document(&format!(r#""ref": {ref_id}"#));
+        drawn(&document.static_render_items(&digits_source(), &state, &SkinTextState::default()))
+            .iter()
+            .map(|(cell, _)| *cell)
+            .collect()
+    };
+    assert_eq!(cells(374), vec![2, 11, 5, 0]);
+    assert_eq!(cells(376), vec![1, 11, 2, 5]);
+    assert_eq!(cells(372), vec![7, 5, 0, 11, 0, 0]);
+    // Without a result the values are missing and nothing is drawn.
+    let none = float_document(r#""ref": 374"#).static_render_items(
+        &digits_source(),
+        &SkinDrawState::default(),
+        &SkinTextState::default(),
+    );
+    assert!(drawn(&none).is_empty());
+}

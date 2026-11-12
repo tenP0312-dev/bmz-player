@@ -259,7 +259,7 @@ pub struct FinishSessionSnapshot {
     manually_stopped: bool,
     assist: AssistRuntime,
     battle_opponent: Option<bmz_render::snapshot::OpponentRenderSnapshot>,
-    /// FAILED で終わったときの、落ちた小節の番号。
+    /// ゲージが 0 になった時点の小節位置（skin number 379）。
     fail_measure: Option<u32>,
 }
 
@@ -360,7 +360,7 @@ impl FinishSessionSnapshot {
             manually_stopped: session.manually_stopped,
             assist: session.assist,
             battle_opponent: crate::screens::play_snapshot::final_opponent_render_snapshot(session),
-            fail_measure: session.failed_measure(),
+            fail_measure: session.gauge_zero_measure(),
         }
     }
 }

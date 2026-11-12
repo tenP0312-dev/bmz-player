@@ -316,27 +316,31 @@ pub struct GameSession {
     pub scoring_closed_at: Option<TimeUs>,
     /// HCN ゲージ増減の前回更新時刻。
     pub last_hcn_gauge_at: Option<TimeUs>,
+    /// ゲージが 0 になった最初の譜面時刻。プレイが続いても残り、一度だけ設定する。
+    pub gauge_zero_at: Option<TimeUs>,
 }
 
-/// `time` 以前で最後の小節線の小節番号。`bar_lines` は時刻順を前提とする。
-pub(crate) fn measure_at_time(
+/// `time` 以前で最後の小節線を、4/4 拍子 1 小節を 1 とした位置で数えた整数部。
+///
+/// 小節の長さを変えた譜面では、小節番号ではなく積み上げた長さで数える。
+/// `bar_lines` は時刻順を前提とする。
+pub(crate) fn measure_position_at_time(
     bar_lines: &[bmz_chart::model::BarLine],
     time: TimeUs,
 ) -> Option<u32> {
     let end = bar_lines.partition_point(|line| line.time <= time);
-    end.checked_sub(1).map(|index| bar_lines[index].measure)
+    let line = bar_lines.get(end.checked_sub(1)?)?;
+    let position = line.tick.0 / u64::from(bmz_chart::timing::TICKS_PER_MEASURE);
+    Some(u32::try_from(position).unwrap_or(u32::MAX))
 }
 
 impl GameSession {
-    /// FAILED で終わったときに、落ちた時点がある小節番号（譜面の小節番号そのまま）。
+    /// ゲージが 0 になった最初の時点の、4/4 拍子 1 小節を 1 とした位置の整数部（0 始まり）。
     ///
-    /// 確定時刻以前で最後の小節線の番号を返す。FAILED 以外、確定前、小節線が無い譜面は `None`。
-    pub fn failed_measure(&self) -> Option<u32> {
-        if self.state != PlayState::Failed {
-            return None;
-        }
-        let settled_at = self.result_settled_at()?;
-        measure_at_time(&self.chart.bar_lines, settled_at)
+    /// FAILED で終わったかどうかとは関係なく、ゲージが 0 になったことがあれば返す。
+    /// 全小節が 4/4 の譜面では BMS の小節番号と同じ。ゲージが 0 になっていなければ `None`。
+    pub fn gauge_zero_measure(&self) -> Option<u32> {
+        measure_position_at_time(&self.chart.bar_lines, self.gauge_zero_at?)
     }
 
     /// 採用する結果の確定時刻。採点を閉じていない `Playing` の間は `None`。

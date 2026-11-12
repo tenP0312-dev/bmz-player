@@ -411,19 +411,19 @@ pub(in crate::skin) fn skin_state_number(ref_id: i32, state: &SkinDrawState) -> 
         181 => state.ir_ranking.clear_rate,
         182 => state.ir_ranking.previous_rank,
         202..=242 => ir_clear_stat_number(&state.ir_ranking, ref_id),
-        // LR2oraja Endless Dream NUMBER_SCORE_DATE (378): the score's play date as
-        // Unix seconds. Select uses the BEST score time, Result the saved attempt's.
-        378 => {
-            let seconds = if state.score_date_sec > 0 {
-                Some(state.score_date_sec)
-            } else {
-                state.last_played_at.filter(|seconds| *seconds > 0)
-            };
-            seconds.and_then(|seconds| i32::try_from(seconds).ok()).map(i64::from)
-        }
-        // LR2oraja Endless Dream NUMBER_FAIL_MEASURE (379): the measure number the
-        // play failed in. Only a FAILED Result has a value.
-        379 => state.fail_measure.map(i64::from),
+        // LR2oraja Endless Dream NUMBER_SCORE_DATE (378): Unix seconds of the last saved
+        // play of the score (Select) or of this saved attempt (Result). Without a
+        // record it is 0, not hidden (SKIN_BEHAVIOR_SPEC 1).
+        378 => Some(
+            state
+                .last_played_at
+                .filter(|seconds| *seconds > 0)
+                .and_then(|seconds| i32::try_from(seconds).ok())
+                .map_or(0, i64::from),
+        ),
+        // LR2oraja Endless Dream NUMBER_FAIL_MEASURE (379): the 4/4-measure position
+        // (floor, 0-based) where the gauge first hit 0. -1 when it never did.
+        379 => Some(state.fail_measure.map_or(-1, i64::from)),
         380..=389 => {
             ir_ranking_entry(&state.ir_ranking, ref_id - 380).and_then(|entry| entry.ex_score)
         }

@@ -113,7 +113,7 @@ pub struct SkinDrawState {
     pub player_stats: PlayerStatsSnapshot,
     pub score_date_sec: i64,
     pub last_played_at: Option<i64>,
-    /// Result の落ちた小節番号。number 379。
+    /// ゲージが 0 になった時点の小節位置。number 379。None は -1 を返す。
     pub fail_measure: Option<u32>,
     pub course_result: CourseResultSkinSnapshot,
     pub gauge: f32,

@@ -25,7 +25,7 @@ pub struct ResultSummary {
     pub chart_sha256: Option<[u8; 32]>,
     /// This saved attempt's time, not the previous best. None for unsaved modes.
     pub last_played_at: Option<i64>,
-    /// FAILED で終わったときの、落ちた小節の番号（skin number 379）。
+    /// ゲージが 0 になった時点の小節位置（skin number 379）。値が無ければ None。
     pub fail_measure: Option<u32>,
     pub clear_type: ClearType,
     pub skin_attempt: bmz_render::snapshot::SkinAttemptState,

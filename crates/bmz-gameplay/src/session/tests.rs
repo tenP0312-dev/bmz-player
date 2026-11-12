@@ -257,6 +257,7 @@ fn session_with_autoplay(chart: PlayableChart) -> GameSession {
         manually_stopped: false,
         scoring_closed_at: None,
         last_hcn_gauge_at: None,
+        gauge_zero_at: None,
     }
 }
 

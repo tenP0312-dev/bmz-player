@@ -661,6 +661,7 @@ pub fn build_game_session_with_input_backend(
         manually_stopped: false,
         scoring_closed_at: None,
         last_hcn_gauge_at: None,
+        gauge_zero_at: None,
     }
 }
 

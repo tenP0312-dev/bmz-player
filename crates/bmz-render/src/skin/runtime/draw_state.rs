@@ -113,6 +113,8 @@ pub struct SkinDrawState {
     pub player_stats: PlayerStatsSnapshot,
     pub score_date_sec: i64,
     pub last_played_at: Option<i64>,
+    /// ゲージが 0 になった時点の小節位置。number 379。None は -1 を返す。
+    pub fail_measure: Option<u32>,
     pub course_result: CourseResultSkinSnapshot,
     pub gauge: f32,
     pub gauge_type: i32,
@@ -592,6 +594,7 @@ impl Default for SkinDrawState {
             player_stats: PlayerStatsSnapshot::default(),
             score_date_sec: 0,
             last_played_at: None,
+            fail_measure: None,
             course_result: CourseResultSkinSnapshot::default(),
             gauge: 0.0,
             gauge_type: 2,

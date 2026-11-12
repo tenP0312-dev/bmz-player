@@ -783,3 +783,42 @@ fn assist_easy_gauge_clears_with_light_assist_lamp_in_every_definition_table() {
         );
     }
 }
+
+#[test]
+fn reached_zero_survives_hard_to_groove_shift() {
+    let mut gauge = GaugeState::new_with_auto_shift(
+        GaugeType::ExHard,
+        GaugeAutoShiftMode::HardToGroove,
+        160.0,
+        1000,
+    );
+    assert!(!gauge.reached_zero);
+
+    gauge.apply_judge(Judge::Poor, 20.0);
+
+    assert_eq!(gauge.selected, GaugeType::Normal);
+    assert!(gauge.reached_zero);
+}
+
+#[test]
+fn reached_zero_is_not_recorded_by_best_clear_shift_or_groove_floor() {
+    let mut best_clear = GaugeState::new_with_auto_shift(
+        GaugeType::ExHard,
+        GaugeAutoShiftMode::BestClear,
+        160.0,
+        1000,
+    );
+    best_clear.apply_judge(Judge::Poor, 200.0);
+    assert!(!best_clear.reached_zero);
+
+    // A groove gauge never closes the play at its floor, so it is not "zero".
+    let mut normal = GaugeState::new(GaugeType::Normal, 160.0, 1000);
+    normal.apply_judge(Judge::Poor, 200.0);
+    assert!(!normal.reached_zero);
+
+    // Continue keeps playing at zero, but the zero is still recorded.
+    let mut keep =
+        GaugeState::new_with_auto_shift(GaugeType::Hard, GaugeAutoShiftMode::Continue, 160.0, 1000);
+    keep.apply_judge(Judge::Poor, 200.0);
+    assert!(keep.reached_zero);
+}

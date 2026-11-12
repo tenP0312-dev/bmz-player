@@ -706,6 +706,7 @@ mod tests {
     fn stage_summary(clear_type: ClearType, gauge_value: f32) -> ResultSummary {
         ResultSummary {
             last_played_at: None,
+            fail_measure: None,
             chart_md5: None,
             chart_sha256: None,
             clear_type,

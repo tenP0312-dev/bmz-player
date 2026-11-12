@@ -166,6 +166,9 @@ fn update_course_combo_state(session: &mut GameSession, event: &JudgementEvent) 
 }
 
 pub(super) fn update_failed_state_from_gauge(session: &mut GameSession) {
+    if session.gauge_zero_at.is_none() && session.gauge.reached_zero {
+        session.gauge_zero_at = Some(session.audio_clock.now());
+    }
     if session.state == PlayState::Playing && session.gauge.current_closes_play_on_zero() {
         session.state = PlayState::Failed;
     }

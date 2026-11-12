@@ -130,6 +130,8 @@ impl WinitApp {
         chart_metadata: Option<ChartListItem>,
         launch: DecideLaunch,
     ) {
+        // number 379 is cleared when the next play (or its decide) starts.
+        self.select.last_fail_measure = None;
         // Pre-import placeholder only: resolve the same AUTO fallback / FORCE
         // priority as preload and account for Battle here. The running session
         // replaces this with a count derived from the imported source chart.

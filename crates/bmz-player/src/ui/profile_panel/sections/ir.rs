@@ -100,6 +100,7 @@ pub(in crate::ui::profile_panel) fn build_profile_ir_section(
                     ui.horizontal(|ui| {
                         ui.checkbox(&mut provider.enabled, "");
                         ui.label(tr!(text, "profile-ir-provider", "number" => index + 1));
+                        // Kept from upstream; no deletable provider exists in this fork.
                         if index >= BUILTIN_IR_PROVIDER_COUNT
                             && ui.button(tr!(text, "common-delete")).clicked()
                         {
@@ -117,66 +118,22 @@ pub(in crate::ui::profile_panel) fn build_profile_ir_section(
                             credential_store,
                         )
                     });
-                    let endpoint_editable =
-                        index >= BUILTIN_IR_PROVIDER_COUNT && !logged_in && !ir_login.busy;
-                    match index {
-                        0..=2 => {
-                            ui.horizontal(|ui| {
-                                ui.label(tr!(text, "profile-ir-provider-kind"));
-                                ui.label(match index {
-                                    0 => tr!(text, "profile-ir-provider-bmz"),
-                                    1 => tr!(text, "profile-ir-provider-rian"),
-                                    _ => tr!(text, "profile-ir-provider-bms-ir"),
-                                });
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label(tr!(text, "profile-ir-base-url"));
-                                ui.add_enabled(
-                                    false,
-                                    egui::TextEdit::singleline(&mut provider.base_url)
-                                        .desired_width(300.0),
-                                );
-                                ui.hyperlink_to(
-                                    tr!(text, "profile-ir-open-browser"),
-                                    provider.base_url.clone(),
-                                );
-                            });
-                        }
-                        _ => {
-                            ui.add_enabled_ui(endpoint_editable, |ui| {
-                                let mut family = ir_provider_family(&provider.provider).to_string();
-                                let previous_family = family.clone();
-                                egui::ComboBox::new(
-                                    ("profile_ir_provider_protocol", index),
-                                    tr!(text, "profile-ir-provider-protocol"),
-                                )
-                                .selected_text(family.clone())
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(
-                                        &mut family,
-                                        crate::ir::bmz_official::BMZ_IR_PROVIDER.to_string(),
-                                        crate::ir::bmz_official::BMZ_IR_PROVIDER,
-                                    );
-                                    ui.selectable_value(
-                                        &mut family,
-                                        crate::ir::rian_ir::RIAN_IR_PROVIDER.to_string(),
-                                        crate::ir::rian_ir::RIAN_IR_PROVIDER,
-                                    );
-                                });
-                                if family != previous_family {
-                                    provider.provider = family;
-                                }
-                                ir_provider_text_row(
-                                    ui,
-                                    &tr!(text, "profile-ir-base-url"),
-                                    &mut provider.base_url,
-                                );
-                            });
-                        }
-                    }
-                    if index >= BUILTIN_IR_PROVIDER_COUNT && !endpoint_editable && logged_in {
-                        ui.small(tr!(text, "profile-ir-logout-to-change"));
-                    }
+                    // BMS-IR fork: the only provider is BMS-IR with a fixed endpoint.
+                    ui.horizontal(|ui| {
+                        ui.label(tr!(text, "profile-ir-provider-kind"));
+                        ui.label(tr!(text, "profile-ir-provider-bms-ir"));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label(tr!(text, "profile-ir-base-url"));
+                        ui.add_enabled(
+                            false,
+                            egui::TextEdit::singleline(&mut provider.base_url).desired_width(300.0),
+                        );
+                        ui.hyperlink_to(
+                            tr!(text, "profile-ir-open-browser"),
+                            provider.base_url.clone(),
+                        );
+                    });
                     let row_target = IrProviderUiTarget::new(
                         provider.provider.clone(),
                         provider.base_url.clone(),
@@ -385,9 +342,6 @@ pub(in crate::ui::profile_panel) fn build_profile_ir_section(
                 profile.ir.providers.remove(index);
                 ir_login.remove_provider_form(index);
                 ir_device_key.remove_provider(index);
-            }
-            if ui.button(tr!(text, "profile-ir-add-provider")).clicked() {
-                profile.ir.providers.push(IrProviderConfig::custom());
             }
             build_ir_bulk_operations(ui, &profile.ir, ir_manual, text);
         });

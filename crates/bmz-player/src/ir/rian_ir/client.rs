@@ -2,6 +2,7 @@ use super::*;
 
 impl RianIrClient {
     pub fn new(base_url: &str) -> Result<Self> {
+        crate::fork_policy::ensure_ir_origin_allowed(base_url, "rianIR")?;
         Ok(Self {
             base_url: parse_base_url(base_url)?,
             http: reqwest::Client::builder()

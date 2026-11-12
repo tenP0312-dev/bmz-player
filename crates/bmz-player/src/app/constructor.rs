@@ -457,6 +457,10 @@ impl WinitApp {
                 obs_config_deferred: false,
                 obs_controller,
                 applied_obs_config,
+                arena: crate::arena::ArenaController::inactive(
+                    crate::arena::ConnectionStatus::Disabled,
+                ),
+                applied_arena: None,
                 exit_configs_saved: false,
                 exit_prepared: false,
                 last_scene_kind: None,

@@ -17,6 +17,31 @@ pub(super) fn skin_gauge_notes_count(gauge: f32, parts: i32, max: f32) -> i32 {
     if gauge > 0.0 { ((gauge * parts as f32 / max.max(1.0)) as i32).max(1) } else { 0 }
 }
 
+/// Lowest value a gauge can show: ASSIST EASY / EASY / NORMAL never drop below 2.
+pub(super) fn skin_gauge_min_value(gameplay_gauge_type: i32) -> f32 {
+    if (0..=2).contains(&gameplay_gauge_type) { 2.0 } else { 0.0 }
+}
+
+/// Result-screen fill animation: the gauge grows from its minimum to the final value
+/// between `starttime` and `endtime` (screen time), never beyond the final value.
+pub(super) fn skin_gauge_result_stretch_value(
+    final_value: f32,
+    min: f32,
+    max: f32,
+    elapsed_ms: i32,
+    starttime: i32,
+    endtime: i32,
+) -> f32 {
+    if elapsed_ms >= endtime || endtime <= starttime {
+        return final_value;
+    }
+    if elapsed_ms < starttime {
+        return min.min(final_value);
+    }
+    let progress = (elapsed_ms - starttime) as f32 / (endtime - starttime) as f32;
+    (max * progress).max(min).min(final_value)
+}
+
 pub(super) fn skin_gauge_frame_color(frame: ResolvedSkinFrame) -> Color {
     Color::rgba(
         frame.r as f32 / 255.0,

@@ -72,7 +72,20 @@ macro_rules! skin_document_render_play_gauge_methods {
             let parts = gauge_def.parts.max(1);
             let max = state.gauge_max.max(1.0);
             let border = state.gauge_border;
-            let notes = skin_gauge_notes_count(state.gauge, parts, max);
+            // Only the result screen fills the gauge up; Play shows the live value.
+            let gauge_value = if state.result_failed.is_some() {
+                skin_gauge_result_stretch_value(
+                    state.gauge,
+                    skin_gauge_min_value(state.gauge_type),
+                    max,
+                    state.elapsed_ms,
+                    gauge_def.starttime,
+                    gauge_def.endtime,
+                )
+            } else {
+                state.gauge
+            };
+            let notes = skin_gauge_notes_count(gauge_value, parts, max);
             let animation = skin_gauge_animation_index(gauge_def, state);
             let exgauge = skin_gauge_node_base(state.gauge_type);
             let anim_type = gauge_def.gauge_type;

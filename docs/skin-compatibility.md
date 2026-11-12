@@ -78,6 +78,7 @@ Resultのお気に入りは、単曲・コース曲間で`act = 89 / 90`とimage
 | PMS見逃しノーツ | `note.dst2` / `DST_NOTE2`による判定ライン上の待機・落下・消滅と、処理済みノーツの即時非表示に対応します。キーモードによらず、`dst2`を持つスキンに適用します。[仕様](skin.md#playの見逃しノーツと判定領域)、[描画テスト](../crates/bmz-render/src/skin/tests/play/cases_04.rs)、[snapshotテスト](../crates/bmz-player/src/screens/play_snapshot/tests/cases_01.rs) |
 | PeacefulPlayのKEY LOGGER | 押下ノーツ・判定数グラフ・NPS・チャタリング警告を、BMZの入力履歴で描きます。表示列はボタン点灯のkey-on timerから求め、7 to 9版のレーン割り当てに従います。[仕様](skin.md#peacefulplay互換のキーロガー)、[runtimeテスト](../crates/bmz-render/src/skin/tests/runtime/cases_01.rs)、[decodeテスト](../crates/bmz-skin/src/tests/cases_06.rs) |
 | 判定領域 | judgeの`index`ごとの領域を、キーモード内のレーン番号から選びます。9KEYSの3領域はKEY1-3 / KEY4-6 / KEY7-9です。5K/7Kの対戦表示は通常スキン使用時も1P/2Pを分離し、通常DPの共通1領域・左右2領域は維持します。[仕様](skin.md#battle-session-skin)、[対戦・通常DPの回帰テスト](../crates/bmz-render/src/plan/tests/judge_regions.rs)、[レーン対応テスト](../crates/bmz-render/src/skin/tests/play/cases_06.rs) |
+| Resultのゲージ伸び演出 | Result画面のゲージは、`starttime`〜`endtime`（既定0〜500ms、画面時間）で最小値（ASSIST EASY / EASY / NORMALは2、他は0）から最後の値まで伸びます。最後の値は超えません。Playは従来どおり現在値です。LR2の`#SRC_GROOVEGAUGE`は17・18列目を渡します。[回帰テスト](../crates/bmz-render/src/skin/tests/gauge_result_stretch.rs) |
 | RANDOM gauge animation | `type=0`のanimationをシーンごとのruntime stateで更新します。[GaugeAnimationRuntime](../crates/bmz-render/src/skin/runtime/gauge_animation.rs)です。parts・flashの一致確認は下記の未検証項目を参照 |
 | text / font | align、overflow、wrapping、shadow/outline、TTF/OTF/TTC、bitmap font等です。beatorajaの`font.fallback`と欠字の代替候補（□ ▢ ☐ ■ ?）に対応します。文字atlas cacheを利用します。[仕様](skin.md#フォントのfallbackと欠字表示)、[text renderer](../crates/bmz-render/src/renderer/text/)、[GPU側cache利用](../crates/bmz-render/src/renderer/gpu/text.rs) |
 | 文字の影 | `shadowOffset`だけの指定でも、beatorajaと同じく文字色の半分の明るさで描きます。[仕様](skin.md#text-opacity) |
@@ -157,6 +158,8 @@ timerの単位・OFF値・書き込み制約・失敗時の値は[skin.md](skin.
 確定した不具合や未実装機能として扱わず、同一スキン・同一条件でbeatorajaと照合して判断します。
 
 - `SkinGauge.prepare`相当のタイミングでの`parts`再計算と、モード切り替え時のボーダー位置です。
+  粒の数とボーダーは毎フレーム、今のゲージの種類で決めます（`docs/bmsir/SKIN_BEHAVIOR_SPEC.md` 6.3と同じ）。
+  7→9鍵変換時の粒数の増加（BMZに変換機能が無い）と、NantokaManiaの粒数固定（Arena独自）は未対応です。
 - Lua側の`P1_grooveflash`等、固定座標flashとBMZ側のgauge表示の一致です。
 - destination変換やstretchの、上記で確認した描画経路以外への適用範囲です。
 

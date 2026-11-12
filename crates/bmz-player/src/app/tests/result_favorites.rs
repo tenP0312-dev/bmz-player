@@ -218,6 +218,7 @@ fn result_favorites_route_keys_skin_events_and_course_boundaries_without_skin_bu
         stage_charts: vec![],
         entry_summaries: vec![],
         entry_arranges: vec![],
+        floating_hispeed_used: false,
         total_ex_score: 0,
         max_ex_score: 0,
         total_notes: 0,

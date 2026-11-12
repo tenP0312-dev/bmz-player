@@ -314,6 +314,7 @@ fn system_sound_normalization_poll_preserves_set_load_and_rejects_stale_results(
         stage_charts: Vec::new(),
         entry_summaries: Vec::new(),
         entry_arranges: Vec::new(),
+        floating_hispeed_used: false,
         total_ex_score: 0,
         max_ex_score: 0,
         total_notes: 0,

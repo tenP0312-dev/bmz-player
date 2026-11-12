@@ -7,7 +7,17 @@ pub fn configured_provider_key(entry: &IrProviderConfig) -> Option<&str> {
 
 pub fn configured_provider_display_name(entry: &IrProviderConfig) -> Option<&str> {
     let provider_key = configured_provider_key(entry)?;
-    if crate::ir::bms_ir::is_bms_ir_config(entry) { Some("BMS-IR") } else { Some(provider_key) }
+    if crate::ir::bms_ir::is_bms_ir_config(entry) {
+        Some("BMS-IR")
+    } else if crate::ir::rian_ir::is_rian_ir_config(entry) {
+        Some("rianIR")
+    } else if matches!(entry.provider.trim().to_ascii_lowercase().as_str(), "bmz" | "bmz-official")
+        || matches!(provider_key, "bmz" | "bmz-official")
+    {
+        Some("BMZ IR")
+    } else {
+        Some(provider_key)
+    }
 }
 
 pub fn provider_config_for_key<'a>(
@@ -17,17 +27,13 @@ pub fn provider_config_for_key<'a>(
     ir_config.providers.iter().find(|entry| {
         entry.enabled
             && !entry.base_url.is_empty()
-            && crate::ir::bms_ir::is_bms_ir_config(entry)
             && configured_provider_key(entry).is_some_and(|provider_key| provider_key == key)
     })
 }
 
 pub fn primary_provider_config(ir_config: &IrConfig) -> Option<&IrProviderConfig> {
     let usable = |entry: &IrProviderConfig| {
-        entry.enabled
-            && !entry.base_url.is_empty()
-            && crate::ir::bms_ir::is_bms_ir_config(entry)
-            && configured_provider_key(entry).is_some()
+        entry.enabled && !entry.base_url.is_empty() && configured_provider_key(entry).is_some()
     };
     let primary_provider = ir_config.primary_provider.trim();
     if primary_provider.is_empty() {
@@ -74,24 +80,9 @@ mod tests {
     }
 
     #[test]
-    fn non_bms_ir_providers_are_never_selected() {
-        let mut rian = IrProviderConfig::rian_ir();
-        rian.provider_key = crate::ir::rian_ir::RIAN_IR_PROVIDER.to_string();
-        rian.enabled = true;
-        let config = IrConfig {
-            primary_provider: String::new(),
-            providers: vec![rian],
-            ..IrConfig::default()
-        };
-
-        assert!(primary_provider_config(&config).is_none());
-        assert!(provider_config_for_key(&config, crate::ir::rian_ir::RIAN_IR_PROVIDER).is_none());
-    }
-
-    #[test]
     fn legacy_empty_primary_uses_the_first_usable_provider() {
-        let mut provider = IrProviderConfig::bms_ir();
-        provider.provider_key = crate::ir::bms_ir::BMS_IR_PROVIDER.to_string();
+        let mut provider = IrProviderConfig::rian_ir();
+        provider.provider_key = crate::ir::rian_ir::RIAN_IR_PROVIDER.to_string();
         provider.enabled = true;
         let config = IrConfig {
             primary_provider: String::new(),
@@ -100,6 +91,6 @@ mod tests {
         };
 
         let selected = primary_provider_config(&config).expect("legacy fallback provider");
-        assert!(crate::ir::bms_ir::is_bms_ir_config(selected));
+        assert!(crate::ir::rian_ir::is_rian_ir_config(selected));
     }
 }

@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn online_features_are_compiled_out() {
-        assert!(!ONLINE_UPDATES_ENABLED);
-        assert!(!DISCORD_PRESENCE_ENABLED);
+        const { assert!(!ONLINE_UPDATES_ENABLED) };
+        const { assert!(!DISCORD_PRESENCE_ENABLED) };
     }
 }

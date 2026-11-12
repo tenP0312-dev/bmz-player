@@ -607,12 +607,13 @@ mod tests {
     }
 
     #[test]
-    fn config_requires_enabled_and_keeps_song_detail_choice() {
+    fn config_never_enables_presence_in_the_bms_ir_fork() {
         let mut config = DiscordConfig::default();
         assert_eq!(DiscordPresenceConfig::from_app_config(&config), None);
 
+        // BMS-IR fork: Discord presence is compiled out, so enabling it in the
+        // config still yields no presence (nothing is sent to Discord).
         config.enabled = true;
-        let presence_config = DiscordPresenceConfig::from_app_config(&config).unwrap();
-        assert!(presence_config.show_song_details);
+        assert_eq!(DiscordPresenceConfig::from_app_config(&config), None);
     }
 }

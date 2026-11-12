@@ -1087,3 +1087,16 @@ downloads-state-validating = 正在检查压缩包
 skin-external-allow = 允许此外部皮肤
 skin-external-revoke = 撤销外部皮肤权限
 skin-external-allow-help = 允许此皮肤读取其实际所在的文件夹。可在配置文件中添加共享资源文件夹。
+
+arena-end-cancelled-unknown = 比赛已取消
+arena-end-forfeited = 你已弃权（{ $reason }）
+arena-end-room-disbanded = 房主解散了房间
+arena-end-room-kicked = 你已被房主移出房间
+arena-stage-playing = 游玩中
+arena-stage-finished = 游玩结束，等待结果…
+arena-withdraw = 弃权
+arena-live-line = { $name }：EX { $ex } / { $done } 个音符 / BP { $bp }
+arena-live-disconnected = [已断线]
+arena-result-title = 比赛结果
+arena-result-line = 第 { $place } 名 { $name }：EX { $ex }（{ $clear }）
+toast-arena-play-locked = Arena 比赛中不能中途退出游玩。

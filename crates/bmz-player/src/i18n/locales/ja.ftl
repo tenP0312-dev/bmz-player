@@ -1087,3 +1087,16 @@ downloads-state-validating = 書庫を確認中
 skin-external-allow = この外部スキンを許可
 skin-external-revoke = 外部スキンの許可を解除
 skin-external-allow-help = 選択したスキンと、その実体があるフォルダー内の参照を許可します。共有資源の範囲はプロファイル設定で追加できます。
+
+arena-end-cancelled-unknown = 試合が取り消されました
+arena-end-forfeited = 棄権しました（{ $reason }）
+arena-end-room-disbanded = ホストがルームを解散しました
+arena-end-room-kicked = ホストにルームから外されました
+arena-stage-playing = プレイ中
+arena-stage-finished = プレイ終了。結果を待っています…
+arena-withdraw = 棄権する
+arena-live-line = { $name }: EX { $ex } / { $done } ノーツ / BP { $bp }
+arena-live-disconnected = [切断中]
+arena-result-title = 試合の結果
+arena-result-line = { $place }位 { $name }: EX { $ex }（{ $clear }）
+toast-arena-play-locked = Arena の対戦中は、プレイを途中で抜けられません。

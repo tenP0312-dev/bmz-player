@@ -28,6 +28,8 @@ pub(super) struct ArenaPlayLaunch {
     pub(super) loaded_reported: bool,
     /// The audio clock started (the song is playing).
     pub(super) started: bool,
+    /// `final` was produced (or the play could not report it).
+    pub(super) final_reported: bool,
 }
 
 /// What `maybe_start_ready_phase` does at the end of READY.
@@ -59,10 +61,19 @@ impl WinitApp {
     pub(super) fn sync_arena_play(&mut self, scene_kind: AppSceneKind) {
         let handle = self.integrations.arena.handle();
         let panel = handle.panel();
+        // `ready` on the result screen waits for the normal IR submission.
+        let settled = (scene_kind == AppSceneKind::Result).then(|| self.result_ir_settled());
+        if self.integrations.arena_result_settled != settled {
+            self.integrations.arena_result_settled = settled;
+            handle.set_result_settled(settled.unwrap_or(false));
+        }
         // The Arena song was played: the next play is the player's own again.
         if self.play.arena_play.as_ref().is_some_and(|play| play.started)
             && scene_kind != AppSceneKind::Play
         {
+            if self.play.arena_play.as_ref().is_some_and(|play| !play.final_reported) {
+                tracing::warn!("arena: the play left the Play scene without `final`");
+            }
             self.play.arena_play = None;
         }
         let Some(current) = panel.current_match.as_ref() else {
@@ -89,11 +100,96 @@ impl WinitApp {
                 handle.set_option_choice(choice);
             }
         }
-        if let Some(prepare) = panel.pending_prepare.clone()
-            && self.arena_can_launch(scene_kind)
-        {
-            self.launch_arena_play(&handle, prepare);
+        if scene_kind == AppSceneKind::Play {
+            self.report_arena_progress(&handle);
         }
+        if let Some(prepare) = panel.pending_prepare.clone() {
+            // A repeated `prepare` (after a reconnect) for the song already being
+            // loaded or played is not started again.
+            if self.play.arena_play.as_ref().is_some_and(|play| play.match_id == prepare.match_id) {
+                handle.prepare_taken(prepare.match_id);
+            } else if self.arena_can_launch(scene_kind) {
+                self.launch_arena_play(&handle, prepare);
+            }
+        }
+    }
+
+    /// `live` while the match song plays and `final` once it has ended.
+    fn report_arena_progress(&mut self, handle: &crate::arena::connection::ArenaHandle) {
+        let Some(arena_play) = self.play.arena_play.as_ref() else {
+            return;
+        };
+        if !arena_play.started || arena_play.final_reported {
+            return;
+        }
+        let match_id = arena_play.match_id.clone();
+        let Some(ending) = &self.play.play_ending else {
+            // Playing: the latest values of the play, from the render snapshot.
+            if let Some(snapshot) = &self.play.last_play_snapshot {
+                handle.live_sample(match_id, snapshot_play_values(snapshot));
+            }
+            return;
+        };
+        if let Some(finished) = &ending.finished {
+            let score = &finished.result.score;
+            let values = crate::arena::session::PlayValues {
+                exscore: score.ex_score(),
+                processed_notes: score.past_notes,
+                minbp: score.bp(),
+                combo_break: score.cb(),
+                max_combo: score.max_combo,
+            };
+            handle.play_finished(match_id, values, ending.failed, finished.result.clear_type as u8);
+        } else if self
+            .play
+            .active_play
+            .as_ref()
+            .is_some_and(|play| play.running.finish_error.is_some())
+        {
+            // The result could not be built, so nothing true can be said: give up the match.
+            tracing::error!("arena: the play result failed; forfeiting the match");
+            handle.withdraw();
+        } else {
+            // The result is still being saved; `final` follows as soon as it is built.
+            return;
+        }
+        if let Some(arena_play) = self.play.arena_play.as_mut() {
+            arena_play.final_reported = true;
+        }
+    }
+
+    /// Ending a match song early is not possible (spec 2, "ESC と START+SELECT
+    /// でプレイを抜けられません"). READY is still free to leave: that forfeits.
+    pub(super) fn arena_locks_play_exit(&mut self) -> bool {
+        if !self.play.arena_play.as_ref().is_some_and(|play| play.started) {
+            return false;
+        }
+        let text = Localizer::new(self.boot.profile_config.ui.locale());
+        self.show_left_overlay_toast(text.format("toast-arena-play-locked", &FluentArgs::new()));
+        true
+    }
+
+    /// Whether the normal IR submission of the result screen has finished
+    /// (spec 3.3: `ready` on `result`).
+    pub(super) fn result_ir_settled(&self) -> bool {
+        self.result.result_ir.as_ref().is_none_or(|state| {
+            matches!(state.submit, crate::screens::result_ir::IrSubmitState::Done { .. })
+        })
+    }
+
+    /// The Arena `state` for the current scene.
+    pub(super) fn arena_screen(&self, scene_kind: AppSceneKind) -> crate::arena::ScreenState {
+        let running = self.play.active_play.as_ref().map(|play| &play.running);
+        arena_screen_for(
+            scene_kind,
+            ArenaPlayKind {
+                course: self.play.active_course.is_some(),
+                practice: self.play.practice_session.is_some()
+                    || running.is_some_and(|running| running.practice_mode),
+                autoplay: running.is_some_and(|running| running.session.autoplay.is_some()),
+                replay: running.is_some_and(|running| running.session.replay_player.is_some()),
+            },
+        )
     }
 
     /// While an Arena match is reserved, ordinary songs cannot be started
@@ -146,6 +242,7 @@ impl WinitApp {
             ln_mode: prepare.ln_mode.clone(),
             loaded_reported: false,
             started: false,
+            final_reported: false,
         });
         let mut options = self.play_start_options();
         crate::arena::options::apply_arena_overrides(
@@ -226,7 +323,10 @@ impl WinitApp {
                     arena_play.loaded_reported,
                 ) =>
             {
-                arena_play.started = true;
+                if !arena_play.started {
+                    arena_play.started = true;
+                    handle.play_started(arena_play.match_id.clone());
+                }
                 ArenaStartGate::Go
             }
             _ => ArenaStartGate::Hold,
@@ -240,5 +340,116 @@ impl WinitApp {
         {
             self.integrations.arena.handle().load_failed(arena_play.match_id);
         }
+    }
+}
+
+/// What kind of play the app is in, for the Arena `state`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) struct ArenaPlayKind {
+    pub(super) course: bool,
+    pub(super) practice: bool,
+    pub(super) autoplay: bool,
+    pub(super) replay: bool,
+}
+
+/// Arena `state` for a scene (spec 3.3). `play` is the ordinary manual play
+/// (including G-BATTLE); the others are told apart so the server never counts
+/// them as the match song. A course also owns its result screens.
+pub(super) fn arena_screen_for(
+    scene_kind: AppSceneKind,
+    kind: ArenaPlayKind,
+) -> crate::arena::ScreenState {
+    use crate::arena::ScreenState;
+    match scene_kind {
+        AppSceneKind::Select => ScreenState::Select,
+        AppSceneKind::Decide => ScreenState::Decide,
+        AppSceneKind::Play if kind.course => ScreenState::Course,
+        AppSceneKind::Play if kind.practice => ScreenState::Practice,
+        AppSceneKind::Play if kind.autoplay => ScreenState::Autoplay,
+        AppSceneKind::Play if kind.replay => ScreenState::Replay,
+        AppSceneKind::Play => ScreenState::Play,
+        AppSceneKind::Result if kind.course => ScreenState::Course,
+        AppSceneKind::Result => ScreenState::Result,
+    }
+}
+
+/// The values of a running play, from its render snapshot.
+fn snapshot_play_values(
+    snapshot: &bmz_render::snapshot::RenderSnapshot,
+) -> crate::arena::session::PlayValues {
+    let counts = &snapshot.judge_counts;
+    crate::arena::session::PlayValues {
+        exscore: snapshot.ex_score,
+        processed_notes: snapshot.past_notes,
+        minbp: counts.bad + counts.poor + counts.empty_poor,
+        combo_break: counts.bad + counts.poor,
+        max_combo: snapshot.max_combo,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::arena::ScreenState;
+
+    fn kind(course: bool, practice: bool, autoplay: bool, replay: bool) -> ArenaPlayKind {
+        ArenaPlayKind { course, practice, autoplay, replay }
+    }
+
+    #[test]
+    fn plays_are_told_apart_for_the_server() {
+        let none = ArenaPlayKind::default();
+        assert_eq!(arena_screen_for(AppSceneKind::Select, none), ScreenState::Select);
+        assert_eq!(arena_screen_for(AppSceneKind::Decide, none), ScreenState::Decide);
+        assert_eq!(arena_screen_for(AppSceneKind::Play, none), ScreenState::Play);
+        assert_eq!(arena_screen_for(AppSceneKind::Result, none), ScreenState::Result);
+        assert_eq!(
+            arena_screen_for(AppSceneKind::Play, kind(false, true, false, false)),
+            ScreenState::Practice
+        );
+        assert_eq!(
+            arena_screen_for(AppSceneKind::Play, kind(false, false, true, false)),
+            ScreenState::Autoplay
+        );
+        assert_eq!(
+            arena_screen_for(AppSceneKind::Play, kind(false, false, false, true)),
+            ScreenState::Replay
+        );
+        // A course owns its play and its result screens.
+        assert_eq!(
+            arena_screen_for(AppSceneKind::Play, kind(true, false, false, false)),
+            ScreenState::Course
+        );
+        assert_eq!(
+            arena_screen_for(AppSceneKind::Result, kind(true, false, false, false)),
+            ScreenState::Course
+        );
+        // The course wins over an autoplayed or replayed stage.
+        assert_eq!(
+            arena_screen_for(AppSceneKind::Play, kind(true, false, true, false)),
+            ScreenState::Course
+        );
+    }
+
+    #[test]
+    fn snapshot_values_split_bp_and_combo_break() {
+        let snapshot = bmz_render::snapshot::RenderSnapshot {
+            ex_score: 12,
+            past_notes: 9,
+            max_combo: 7,
+            judge_counts: bmz_render::snapshot::DisplayJudgeCounts {
+                bad: 1,
+                poor: 2,
+                empty_poor: 4,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let values = snapshot_play_values(&snapshot);
+        assert_eq!(values.exscore, 12);
+        assert_eq!(values.processed_notes, 9);
+        assert_eq!(values.minbp, 7);
+        assert_eq!(values.combo_break, 3);
+        assert_eq!(values.max_combo, 7);
     }
 }

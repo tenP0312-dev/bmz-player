@@ -1088,3 +1088,16 @@ downloads-state-validating = 正在檢查壓縮檔
 skin-external-allow = 允許此外部介面主題
 skin-external-revoke = 撤銷外部介面主題權限
 skin-external-allow-help = 允許此介面主題讀取其實際所在的資料夾。可在設定檔中加入共用資源資料夾。
+
+arena-end-cancelled-unknown = 比賽已取消
+arena-end-forfeited = 你已棄權（{ $reason }）
+arena-end-room-disbanded = 房主解散了房間
+arena-end-room-kicked = 你已被房主移出房間
+arena-stage-playing = 遊玩中
+arena-stage-finished = 遊玩結束，等待結果…
+arena-withdraw = 棄權
+arena-live-line = { $name }：EX { $ex } / { $done } 個音符 / BP { $bp }
+arena-live-disconnected = [已斷線]
+arena-result-title = 比賽結果
+arena-result-line = 第 { $place } 名 { $name }：EX { $ex }（{ $clear }）
+toast-arena-play-locked = Arena 比賽中不能中途退出遊玩。

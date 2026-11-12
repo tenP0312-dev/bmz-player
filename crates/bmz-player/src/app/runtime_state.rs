@@ -300,6 +300,8 @@ pub(super) struct IntegrationRuntimeState {
     pub(super) arena_selected_md5: Option<String>,
     /// Last `play_option` handed to Arena for the option phase.
     pub(super) arena_option_choice: Option<u32>,
+    /// Last `result_settled` told to Arena (`None` outside the result screen).
+    pub(super) arena_result_settled: Option<bool>,
     pub(super) arena_answered_check: Option<crate::arena::session::ChartCheckRequest>,
     pub(super) exit_configs_saved: bool,
     /// Sparkle の再起動継続前と通常の `exiting` から共有する終了準備の冪等ガード。

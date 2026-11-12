@@ -17,7 +17,7 @@ use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
 use super::protocol::{Hello, ScreenState, parse_server_message};
 use super::session::{
-    Action, ArenaPanelState, ArenaSession, ConnectionStatus, Event, Now, Phase, Timing,
+    Action, ArenaPanelState, ArenaSession, ConnectionStatus, Event, Now, Phase, PlayValues, Timing,
 };
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -92,6 +92,37 @@ impl ArenaHandle {
     }
 
     /// Leave the room (`queue_cancel`).
+    /// The audio clock of the match song started.
+    pub fn play_started(&self, match_id: String) {
+        self.send(Command::Session(Event::PlayStarted { match_id }));
+    }
+
+    /// The play's current values; the session sends `live` at most once a second.
+    pub fn live_sample(&self, match_id: String, values: PlayValues) {
+        self.send(Command::Session(Event::LiveSample { match_id, values }));
+    }
+
+    /// The song ended: `final`.
+    pub fn play_finished(
+        &self,
+        match_id: String,
+        values: PlayValues,
+        failed: bool,
+        clear_type: u8,
+    ) {
+        self.send(Command::Session(Event::PlayFinished { match_id, values, failed, clear_type }));
+    }
+
+    /// Give up the match (`forfeit`).
+    pub fn withdraw(&self) {
+        self.send(Command::Session(Event::Withdraw));
+    }
+
+    /// The result screen's normal IR submission finished or not.
+    pub fn set_result_settled(&self, settled: bool) {
+        self.send(Command::Session(Event::SetResultSettled(settled)));
+    }
+
     pub fn leave_room(&self) {
         self.send(Command::Session(Event::RoomLeave));
     }
@@ -428,6 +459,18 @@ impl Driver {
                 },
                 command = commands.recv() => match command {
                     None | Some(Command::Shutdown) => {
+                        // Closing in the middle of a match counts as a forfeit (spec 3.6).
+                        for action in self.feed(Event::Withdraw) {
+                            if let Action::Send(message) = action
+                                && let Ok(text) = message.to_json()
+                            {
+                                let _ = tokio::time::timeout(
+                                    CLOSE_TIMEOUT,
+                                    sink.send(Message::Text(text)),
+                                )
+                                .await;
+                            }
+                        }
                         let _ = tokio::time::timeout(CLOSE_TIMEOUT, sink.send(Message::Close(None))).await;
                         return IoExit::Shutdown;
                     }

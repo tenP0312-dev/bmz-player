@@ -131,32 +131,10 @@ B2 のうち、ルームの作成・入室、準備 OK、推薦、`chart` と `c
 まだ読んでいない・使っていないもの：`match_reserved.rules`、`chart.rules`、`chat_history`、`result`（B3）。
 `chat_send` の応答や `chart` の追加キーは資料でも「未確認」です。
 
-## 練習・AUTOPLAY・リプレイ・コースの `state` と `ready`（案）
-
-決定 5 の案です（B2-1 では実装していません。`state` は今のまま `play` です）。
-
-| BMZ の場面 | `state` | 理由 |
-|---|---|---|
-| 通常の手動プレイ（NORMAL） | `play` | 仕様書 3.3 |
-| G-BATTLE | `play` | 仕様書 3.3（NORMAL と G-BATTLE は `play`） |
-| 結果（単曲） | `result` | 同上 |
-| コース・段位（プレイと結果） | `course` | 仕様書 3.3 |
-| PRACTICE | `practice` | 同上 |
-| AUTOPLAY・AUTOPLAY BATTLE | `autoplay` | 同上 |
-| リプレイ再生 | `replay` | 同上 |
-| 決定画面 | `decide` | 同上 |
-
-`ready` は仕様書 3.3 のとおり、`select` のときと、`result` で通常の IR 送信が終わったときだけ `true` にできます。
-B2-1 は `select` のみ実装済みです。`result` の側は、IR 送信の完了を知る入口が要るため B3（結果の扱い）で足す案です。
-`practice` / `autoplay` / `replay` / `course` の間は `ready=false` 固定で、試合の `match_reserved` が来たら
-「通常のプレイ中なら終わるまで待つ」（`finish_current_song`）扱いにして選曲に戻った時点で再び `ready` を許す案です。
-これらの区別の実装には、`AppSceneKind` が Play のまま練習・AUTOPLAY・リプレイ・コースを含むため、
-play の種類を app 側から取り出す入口（`app/play_flow`）が要ります。
-
 ## 段階 B2-2: オプションの確定と読み込み・開始
 
 B2 の残りです。`option_select` から `start_at` まで、自分で曲を始めて READY で待つところまでを入れました。
-`live` / `final` / `forfeit` の送信、ESC 等をふさぐ処理、結果の表示、再接続後にルームへ戻る処理は B3 です。
+`live` / `final` / `forfeit` の送信、ESC 等をふさぐ処理、結果の表示、再接続後にルームへ戻る処理は B3（次の節）です。
 
 ### 流れ
 
@@ -208,5 +186,74 @@ Arena の 1 曲で当てはめるものは、次の 2 か所だけに置きま�
   （LN 1 本 = 1）で、サーバーが照合するのは LN の部屋だけなので、そのままにしています。
 - CN / HCN の部屋（`ln_mode` が `LN` 以外）と、7KEY 以外の試合は始められず、`forfeit` します。
 - `prepare` の `rules.ruleset_profile` が無い・知らない値のときも始めません（推測で補いません）。
-- 試合の途中で ESC 等で抜ける操作は、READY 中のものだけ `forfeit` に結びつけています。プレイ中の ESC は B3 です。
-- 練習・AUTOPLAY・リプレイ・コースの `state` の区別と、`result` での `ready` は B3 です。
+- 試合の途中で ESC 等で抜ける操作は、READY 中のものだけ `forfeit` に結びつけています。プレイ中の ESC は B3 でふさぎました。
+
+## 段階 B3: 試合の後半
+
+`live` / `final`、送り直し、ロック、`forfeit`、結果・取り消し・棄権の表示、再接続後の復帰、`state` の区別を入れました。
+項目名は [ARENA_SERVER_MESSAGES.md](ARENA_SERVER_MESSAGES.md) を正とします。
+
+### `live` と `final`
+
+| 項目 | 内容 |
+|---|---|
+| 値の出どころ | プレイ中は window スレッドが持つ描画スナップショット（`ex_score`、`past_notes`、判定の数、`max_combo`）。`final` は保存済みの `FinishedPlaySession.result`（クリア種別と採点）。ゲームプレイのスレッドには手を入れていません |
+| `live` | 音声の時計が始まってから、`seq` を 1 から増やしながら 1 秒に 1 回まで。`final` の後は送らない |
+| 保護 | 値は減らさない。`processed_notes` は `play_ready` の `totalnotes` まで。EX は処理数の 2 倍まで、新しいノーツ 1 つにつき 2 まで。`max_combo` は処理数まで（サーバーが `invalid_live` で捨てる条件。`arena/session.rs` の `PlayValues::clamped`） |
+| `minbp` / `combo_break` | `minbp` は BAD + POOR + 空 POOR、`combo_break` は BAD + POOR（サーバーはこちらを BP に使う） |
+| `play_option` / `play_mode` / `ln_mode` | `prepare` で確定した値（途中で変えない） |
+| `final.state` | 最後まで遊んでクリア種別が 2 以上なら `complete`（`processed_notes` はノーツ数そのもの）。FAILED 状態で終わった、またはゲージが足りず FAILED のクリアで終わったら `hard_fail` と `clear_type=1`（サーバーはこの組み合わせ以外を拒否する） |
+| `clear_type` | BMZ の `ClearType` の番号が beatoraja の番号と同じなので、そのまま送る |
+| 結果の保存が失敗したとき | 本当のことが言えないので、`final` を作らず `forfeit` する |
+
+### 送り直しと再接続
+
+- `final` は `result`（または取り消し・棄権の確定）が来るまで覚えておく。接続が切れている間に曲が終わっても、再接続して `hello_ok` の
+  `active_match_id` が同じ試合なら、`final`、`play_ready`（読み込み後で開始前のとき）、`state` の順に送る（仕様 3.6）。
+  サーバーが受け取り済みなら重複した `seq` は `invalid_final` で捨てられるだけで、試合は終わらない。
+- 切れたときに残す試合は、`start` を受けた後・プレイ中・`final` 後、および `play_ready` 送信済みの読み込み。
+  それ以外はサーバーが `match_reserved` ほかの写しを送り直す。残した試合に写し（`match_reserved`、`chart`、`prepare`、`option_select`、`start`）が
+  もう一度来ても、曲は始め直さない（`prepare` が来ても `app/arena_flow.rs` が同じ試合の曲を起動しない）。
+- `hello_ok` の `active_match_id` が空、または別の試合なら、手元の試合を捨てる。
+- ルーム：`arena_status.player.queue.room_code` を読み、サーバーにルームが残っていれば同じコードで画面に戻す。
+  参加者の一覧は次の `room_status` で埋まる（再接続の直後には届かない。資料に再同期のメッセージがない）。サーバーに無ければ手元も消す。
+- `match_resume`（`countdown` / `playing`）は、残した試合の `start_at` を更新するだけ。BMZ を終了して開き直した場合は、曲に戻れない
+  （サーバーが切断として棄権にする）。
+
+### ふさぐ操作と棄権
+
+- 曲の時計が始まった後は、ESC、E2+E3、E1+E2 長押しなど、プレイを抜ける操作をすべてふさぎ、トーストを出す（`stop_play_like_escape` の入口）。
+  READY までは抜けられる（抜けると `forfeit`）。
+- 選曲画面のパネルの「棄権する」で `forfeit`（`final` を作る前まで）。BMZ を閉じたときも、試合中なら `forfeit` を送ってから閉じる。
+- 起こらないはずの「プレイ中に `final` なしで選曲に戻る」は、`state` の前に `forfeit` を送る。
+  なお、資料では `forfeit` に `reason` 項目が無いので送っていない（仕様書の `reason` は付けない）。
+- 試合中（`match_reserved` から終わりまで）は、決定画面・練習・AUTOPLAY・リプレイ・コース・結果画面の再挑戦の開始をふさぎ、トーストを出す
+  （`arena_blocks_normal_start`）。コースの途中の次の曲への進み方には入れていない（試合の前に始めたコースを壊さないため）。
+
+### `state` と `ready`
+
+| BMZ の場面 | `state` |
+|---|---|
+| 選曲 / 決定 | `select` / `decide` |
+| 通常の手動プレイ（G-BATTLE も） | `play` |
+| コースのプレイと結果 | `course` |
+| PRACTICE | `practice` |
+| AUTOPLAY、AUTOPLAY BATTLE | `autoplay` |
+| リプレイ再生 | `replay` |
+| 単曲の結果 | `result` |
+
+`ready` はルームで準備 OK を押しているときだけ、`select` では常に、`result` では通常の IR 送信（Sending → Done。IR の設定が無ければ最初から）が
+終わってから `true`。ほかの場面は `false`。サーバーは `select` のときだけ `ready` を読むので、`result` の値は仕様どおりに送る分で、サーバーには効かない。
+`result` で準備 OK の要求は消さない（ルームに残っているため）。取り消し・外された・棄権の確定では消す。
+
+### 表示
+
+選曲画面と結果画面の Arena パネルに出す：段階（プレイ中、プレイ終了・結果待ち）、全員の進み具合（`live` の写し）、結果（順位・名前・EX・クリア、
+棄権は `DNF`）、取り消しの理由（資料にある理由のコード付き、知らない理由は「取り消されました」だけ）、棄権の確定、ルームの解散・追放。
+
+### 未確認・しなかったこと
+
+- `chat_history` の要素、`chat_send` の応答、`chart` の追加キーは資料でも未確認なので読んでいない。
+- `force_end_vote`（強制終了）、`result.series`、`return_to_select_at`（BO2）は土台の範囲外。
+- 実サーバーでの `live` / `final` の受け付け、READY 後の `start_at` の精度、RANDOM の並びの一致は実機で確認していない（B4）。
+- `final` の `processed_notes`（`complete`）は `play_ready` の `totalnotes` と同じ基準（LN 1 本 = 1、CN/HCN = 2）。CN/HCN の部屋は始められないので、この基準は LN の部屋でしか試せていない。

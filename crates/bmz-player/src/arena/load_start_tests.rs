@@ -30,7 +30,7 @@ fn option_select(ready: bool, deadline: f64) -> ServerMessage {
     })
 }
 
-fn prepare(play_option: u32) -> ServerMessage {
+pub(super) fn prepare(play_option: u32) -> ServerMessage {
     ServerMessage::Prepare(Prepare {
         match_id: "m1".into(),
         md5: MD5.into(),
@@ -44,12 +44,12 @@ fn prepare(play_option: u32) -> ServerMessage {
     })
 }
 
-fn in_options(session: &mut ArenaSession, deadline: f64) {
+pub(super) fn in_options(session: &mut ArenaSession, deadline: f64) {
     at_chart(session);
     recv(session, option_select(false, deadline));
 }
 
-fn in_loading(session: &mut ArenaSession) {
+pub(super) fn in_loading(session: &mut ArenaSession) {
     in_options(session, 1_010.0);
     recv(session, prepare(2));
 }

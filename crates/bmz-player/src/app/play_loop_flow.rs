@@ -741,6 +741,11 @@ impl WinitApp {
     }
 
     pub(super) fn stop_play_like_escape(&mut self, reason: &'static str) -> bool {
+        // An Arena match song cannot be left once it has started.
+        if self.arena_locks_play_exit() {
+            tracing::info!(reason, "arena: leaving the match song is locked");
+            return true;
+        }
         if self.viewer_mode {
             return self.begin_viewer_exit_transition(reason);
         }

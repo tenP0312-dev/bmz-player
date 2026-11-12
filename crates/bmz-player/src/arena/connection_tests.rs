@@ -440,6 +440,149 @@ async fn option_prepare_play_ready_and_start_over_the_wire() {
     reply(&mut server, json!({"type":"start","match_id":"m1","start_at":start_at,"ln_mode":"LN"}))
         .await;
     wait_for(&controller, "start gate", |p| p.start_gate.is_some()).await;
-    assert_eq!(controller.panel().start_gate.unwrap().start_at, start_at);
+    // JSON text keeps a float to within its last digit.
+    assert!((controller.panel().start_gate.unwrap().start_at - start_at).abs() < 1e-6);
     controller.shutdown();
+}
+
+/// `m1` through option, prepare, play_ready and start, with the clock running.
+async fn play_until_started(
+    listener: &TcpListener,
+    controller: &ArenaController,
+    server: &mut Server,
+    md5: &str,
+) {
+    controller.handle().create_room();
+    recv_kind(server, "room_entry").await;
+    reply(
+        server,
+        json!({"type":"match_reserved","match_id":"m1","ruleset_profile":"lr2","ln_mode":"LN",
+               "finish_current_song":false,"reservation_timeout":30}),
+    )
+    .await;
+    reply(server, json!({"type":"chart","match_id":"m1","chart":{"md5":md5,"title":"t"}})).await;
+    reply(
+        server,
+        json!({"type":"option_select","match_id":"m1","deadline":now_unix() + 30.0,"ready":false,
+               "ready_count":0,"player_count":2,"play_mode":7,"ln_mode":"LN"}),
+    )
+    .await;
+    wait_for(controller, "option phase", |p| {
+        p.current_match.as_ref().is_some_and(|m| m.option.is_some())
+    })
+    .await;
+    reply(
+        server,
+        json!({"type":"prepare","match_id":"m1","chart":{"md5":md5,"totalnotes":900},
+               "load_deadline":now_unix() + 120.0,"ln_mode":"LN","random_seed":42,
+               "play_option":103,"play_mode":7,"rules":{"ruleset_profile":"lr2"}}),
+    )
+    .await;
+    wait_for(controller, "prepare", |p| p.pending_prepare.is_some()).await;
+    controller.handle().prepare_taken("m1".into());
+    controller.handle().play_loaded("m1".into(), md5.into(), 100);
+    recv_kind(server, "play_ready").await;
+    reply(
+        server,
+        json!({"type":"start","match_id":"m1","start_at":now_unix() + 1.0,"ln_mode":"LN"}),
+    )
+    .await;
+    wait_for(controller, "start gate", |p| p.start_gate.is_some()).await;
+    controller.handle().play_started("m1".into());
+    wait_for(controller, "playing", |p| {
+        p.current_match
+            .as_ref()
+            .is_some_and(|m| m.stage == crate::arena::session::MatchStage::Playing)
+    })
+    .await;
+    let _ = listener;
+}
+
+fn play_values(ex: u32, processed: u32) -> crate::arena::session::PlayValues {
+    crate::arena::session::PlayValues {
+        exscore: ex,
+        processed_notes: processed,
+        minbp: 0,
+        combo_break: 0,
+        max_combo: processed,
+    }
+}
+
+#[tokio::test]
+async fn live_final_resend_after_a_reconnect_and_result_over_the_wire() {
+    let md5 = "0123456789abcdef0123456789abcdef";
+    let (listener, url) = bind().await;
+    let controller =
+        ArenaController::spawn_with_timing(url, hello(), ScreenState::Select, timing());
+    let (mut server, _) = accept_and_welcome(&listener).await;
+    wait_for(&controller, "connected", |p| p.status == ConnectionStatus::Connected).await;
+    play_until_started(&listener, &controller, &mut server, md5).await;
+
+    controller.handle().live_sample("m1".into(), play_values(10, 5));
+    let live = recv_kind(&mut server, "live").await;
+    assert_eq!(
+        live,
+        json!({"type":"live","match_id":"m1","seq":1,"exscore":10,"processed_notes":5,
+               "minbp":0,"combo_break":0,"max_combo":5,"play_option":103,"play_mode":7,
+               "ln_mode":"LN"})
+    );
+
+    // The server's snapshot reaches the panel.
+    reply(
+        &mut server,
+        json!({"type":"live","match_id":"m1","state":"playing","players":[
+            {"player_id":9,"name":"rival","connected":true,"exscore":8,"processed_notes":4}]}),
+    )
+    .await;
+    wait_for(&controller, "live snapshot", |p| {
+        p.current_match.as_ref().is_some_and(|m| m.live_players.len() == 1)
+    })
+    .await;
+
+    // The song ends and the connection drops before the server sees `final`.
+    controller.handle().play_finished("m1".into(), play_values(190, 100), false, 6);
+    let first_final = recv_kind(&mut server, "final").await;
+    assert_eq!(first_final["state"], "complete");
+    assert_eq!(first_final["seq"], 2);
+    drop(server);
+
+    // Reconnect: the server still has the match, so `final` goes first, then `state`.
+    let mut server = accept(&listener).await;
+    assert_eq!(recv(&mut server).await["type"], "hello");
+    reply(
+        &mut server,
+        json!({"type":"hello_ok","protocol":8,"server_protocol":8,"session_id":"s2",
+               "client_flavor":"bmz-player","ruleset_profile":"lr2","heartbeat_seconds":10,
+               "active_match_id":"m1","server_time":now_unix()}),
+    )
+    .await;
+    let again = recv(&mut server).await;
+    assert_eq!(again["type"], "final");
+    assert_eq!(again["seq"], 2);
+    assert_eq!(again["clear_type"], 6);
+    assert_eq!(recv(&mut server).await["type"], "state");
+
+    reply(
+        &mut server,
+        json!({"type":"result","match_id":"m1","rated":false,"players":[
+            {"placement":1,"player_id":4242,"name":"me","exscore":190,"final_state":"complete",
+             "clear_type":6,"clear_label":"HARD"}]}),
+    )
+    .await;
+    wait_for(&controller, "result", |p| p.result.is_some() && p.current_match.is_none()).await;
+    controller.shutdown();
+}
+
+#[tokio::test]
+async fn closing_the_app_in_the_middle_of_the_song_forfeits() {
+    let md5 = "0123456789abcdef0123456789abcdef";
+    let (listener, url) = bind().await;
+    let controller =
+        ArenaController::spawn_with_timing(url, hello(), ScreenState::Select, timing());
+    let (mut server, _) = accept_and_welcome(&listener).await;
+    wait_for(&controller, "connected", |p| p.status == ConnectionStatus::Connected).await;
+    play_until_started(&listener, &controller, &mut server, md5).await;
+    controller.shutdown();
+    let forfeit = recv_kind(&mut server, "forfeit").await;
+    assert_eq!(forfeit, json!({"type":"forfeit","match_id":"m1"}));
 }

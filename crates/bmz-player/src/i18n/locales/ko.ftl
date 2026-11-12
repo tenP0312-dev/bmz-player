@@ -1087,3 +1087,16 @@ downloads-state-validating = 압축 파일 확인 중
 skin-external-allow = 외부 스킨 허용
 skin-external-revoke = 외부 스킨 권한 해제
 skin-external-allow-help = 선택한 스킨과 실제 파일이 있는 폴더의 읽기를 허용합니다. 공유 폴더는 프로필 설정에서 추가할 수 있습니다.
+
+arena-end-cancelled-unknown = 경기가 취소되었습니다
+arena-end-forfeited = 기권했습니다（{ $reason }）
+arena-end-room-disbanded = 방장이 방을 해산했습니다
+arena-end-room-kicked = 방장에 의해 방에서 제외되었습니다
+arena-stage-playing = 플레이 중
+arena-stage-finished = 플레이 종료. 결과를 기다리는 중…
+arena-withdraw = 기권
+arena-live-line = { $name }: EX { $ex } / { $done } 노트 / BP { $bp }
+arena-live-disconnected = [연결 끊김]
+arena-result-title = 경기 결과
+arena-result-line = { $place }위 { $name }: EX { $ex }（{ $clear }）
+toast-arena-play-locked = Arena 경기 중에는 플레이를 중간에 나갈 수 없습니다.

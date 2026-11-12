@@ -1093,3 +1093,16 @@ downloads-state-validating = Checking archive
 skin-external-allow = Allow external skin
 skin-external-revoke = Revoke external skin access
 skin-external-allow-help = Allow this skin to read its real containing folder. Additional shared folders can be specified in the profile settings.
+
+arena-end-cancelled-unknown = The match was cancelled
+arena-end-forfeited = You forfeited ({ $reason })
+arena-end-room-disbanded = The host disbanded the room
+arena-end-room-kicked = The host removed you from the room
+arena-stage-playing = Playing
+arena-stage-finished = Finished. Waiting for the result…
+arena-withdraw = Forfeit
+arena-live-line = { $name }: EX { $ex } / { $done } notes / BP { $bp }
+arena-live-disconnected = [disconnected]
+arena-result-title = Match result
+arena-result-line = #{ $place } { $name }: EX { $ex } ({ $clear })
+toast-arena-play-locked = You cannot leave the song during an Arena match.

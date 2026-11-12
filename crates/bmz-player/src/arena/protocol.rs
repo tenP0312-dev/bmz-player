@@ -101,6 +101,46 @@ pub enum ClientMessage {
     Forfeit {
         match_id: String,
     },
+    /// Progress of the song, at most once a second while playing.
+    Live(LiveReport),
+    /// The result of the song, once, when it ends.
+    Final(FinalReport),
+}
+
+/// `live`: the player's progress (`ARENA_SERVER_MESSAGES.md` 2.4).
+/// `seq` grows within a match and is shared with `final`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LiveReport {
+    pub match_id: String,
+    pub seq: u32,
+    pub exscore: u32,
+    pub processed_notes: u32,
+    /// BAD + POOR + empty POOR (`minbp`).
+    pub minbp: u32,
+    /// BAD + POOR, the server's BP (`combo_break`).
+    pub combo_break: u32,
+    pub max_combo: u32,
+    pub play_option: u32,
+    pub play_mode: u32,
+    pub ln_mode: String,
+}
+
+/// How the song ended (`final.state`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FinalState {
+    Complete,
+    HardFail,
+}
+
+/// `final`: every `live` field plus how the song ended.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FinalReport {
+    #[serde(flatten)]
+    pub live: LiveReport,
+    pub state: FinalState,
+    /// beatoraja clear number (0..=10).
+    pub clear_type: u8,
 }
 
 /// `option_ready`: this player's arrange option (`1P + 10 * 2P + 100 * FLIP`).
@@ -250,11 +290,16 @@ pub struct HelloOk {
 
 /// `arena_status.player`: the fields the panel shows. Missing or mistyped
 /// fields stay `None`; unknown fields (`rating_exact`, `season`, ...) are ignored.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PlayerStatus {
     /// Rounded rating (integer).
     pub rating: Option<i64>,
     pub matches_played: Option<u64>,
+    /// `player.queue.room_code`: the room this account is in on the server.
+    /// `None` when the account is in no room (or `queue` is absent).
+    pub queue_room_code: Option<String>,
+    /// `player.queue` was present, so an absent room code means "no room".
+    pub queue_known: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -386,6 +431,51 @@ pub struct Start {
     pub ln_mode: String,
 }
 
+/// One player in the server's `live` snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct LivePlayer {
+    pub player_id: u64,
+    pub name: String,
+    pub connected: bool,
+    pub exscore: u32,
+    pub processed_notes: u32,
+    pub minbp: u32,
+    pub max_combo: u32,
+    pub finished: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct LiveSnapshot {
+    pub match_id: String,
+    /// `filling`, `selecting`, `options`, `loading`, `countdown`, `playing`, ...
+    pub state: String,
+    pub players: Vec<LivePlayer>,
+}
+
+/// One row of `result.players` (in placement order).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ResultPlayer {
+    pub player_id: u64,
+    pub name: String,
+    pub placement: Option<u32>,
+    pub exscore: u32,
+    pub processed_notes: u32,
+    /// `complete`, `hard_fail`, `forfeit` or `walkover`.
+    pub final_state: String,
+    pub clear_type: Option<u8>,
+    /// `DNF` for a forfeit, `W.O.` for a walkover, else the clear name.
+    pub clear_label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ArenaResult {
+    pub match_id: String,
+    pub players: Vec<ResultPlayer>,
+    pub rated: bool,
+    /// Players who stay in the room.
+    pub room_retained_player_ids: Vec<u64>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ServerMessage {
     HelloOk(HelloOk),
@@ -425,6 +515,26 @@ pub enum ServerMessage {
         reason: String,
     },
     MatchReleased,
+    /// `live` from the server: everyone's progress.
+    LiveSnapshot(LiveSnapshot),
+    /// The match is over.
+    Result(ArenaResult),
+    /// The server accepted this player's forfeit.
+    ForfeitAccepted {
+        match_id: String,
+        reason: String,
+    },
+    /// Sent after a reconnect during `countdown` / `playing`.
+    MatchResume {
+        match_id: String,
+        /// `countdown` or `playing`.
+        state: String,
+        start_at: Option<f64>,
+    },
+    /// The host disbanded the room.
+    RoomDisbanded,
+    /// The host removed this player from the room.
+    RoomKicked,
     /// Any other (or later-stage) message type.
     Unknown(String),
 }
@@ -460,6 +570,13 @@ pub fn parse_server_message(text: &str) -> Result<ServerMessage, serde_json::Err
                 matches_played: player
                     .and_then(|p| p.get("matches_played"))
                     .and_then(Value::as_u64),
+                queue_room_code: player
+                    .and_then(|p| p.get("queue"))
+                    .and_then(|q| q.get("room_code"))
+                    .and_then(Value::as_str)
+                    .map(|code| code.trim().to_owned())
+                    .filter(|code| !code.is_empty()),
+                queue_known: player.and_then(|p| p.get("queue")).is_some_and(Value::is_object),
             })
         }
         "room_status" => {
@@ -575,6 +692,40 @@ pub fn parse_server_message(text: &str) -> Result<ServerMessage, serde_json::Err
         }),
         "match_cancelled" => ServerMessage::MatchCancelled { reason: string("reason") },
         "match_released" => ServerMessage::MatchReleased,
+        "live" => ServerMessage::LiveSnapshot(LiveSnapshot {
+            match_id: string("match_id"),
+            state: string("state"),
+            players: object
+                .get("players")
+                .and_then(Value::as_array)
+                .map(|players| players.iter().filter_map(live_player).collect())
+                .unwrap_or_default(),
+        }),
+        "result" => ServerMessage::Result(ArenaResult {
+            match_id: string("match_id"),
+            players: object
+                .get("players")
+                .and_then(Value::as_array)
+                .map(|players| players.iter().filter_map(result_player).collect())
+                .unwrap_or_default(),
+            rated: flag(object.get("rated")),
+            room_retained_player_ids: object
+                .get("room_retained_player_ids")
+                .and_then(Value::as_array)
+                .map(|ids| ids.iter().filter_map(Value::as_u64).collect())
+                .unwrap_or_default(),
+        }),
+        "forfeit_accepted" => ServerMessage::ForfeitAccepted {
+            match_id: string("match_id"),
+            reason: string("reason"),
+        },
+        "match_resume" => ServerMessage::MatchResume {
+            match_id: string("match_id"),
+            state: string("state"),
+            start_at: number("start_at"),
+        },
+        "room_disbanded" => ServerMessage::RoomDisbanded,
+        "room_kicked" => ServerMessage::RoomKicked,
         other => ServerMessage::Unknown(other.to_owned()),
     })
 }
@@ -611,6 +762,46 @@ fn room_player(value: &Value) -> Option<RoomPlayer> {
         participating: player.get("participating").and_then(Value::as_bool).unwrap_or(true),
         pending: flag(player.get("pending")),
         ready: flag(player.get("ready")),
+    })
+}
+
+fn count_of(object: &serde_json::Map<String, Value>, key: &str) -> u32 {
+    object.get(key).and_then(Value::as_u64).unwrap_or(0).min(u64::from(u32::MAX)) as u32
+}
+
+fn live_player(value: &Value) -> Option<LivePlayer> {
+    let player = value.as_object()?;
+    Some(LivePlayer {
+        player_id: player.get("player_id")?.as_u64()?,
+        name: player.get("name").and_then(Value::as_str).unwrap_or_default().to_owned(),
+        connected: player.get("connected").and_then(Value::as_bool).unwrap_or(true),
+        exscore: count_of(player, "exscore"),
+        processed_notes: count_of(player, "processed_notes"),
+        minbp: count_of(player, "minbp"),
+        max_combo: count_of(player, "max_combo"),
+        finished: flag(player.get("finished")),
+    })
+}
+
+fn result_player(value: &Value) -> Option<ResultPlayer> {
+    let player = value.as_object()?;
+    Some(ResultPlayer {
+        player_id: player.get("player_id").and_then(Value::as_u64).unwrap_or(0),
+        name: player.get("name").and_then(Value::as_str).unwrap_or_default().to_owned(),
+        placement: player.get("placement").and_then(Value::as_u64).map(|v| v as u32),
+        exscore: count_of(player, "exscore"),
+        processed_notes: count_of(player, "processed_notes"),
+        final_state: player
+            .get("final_state")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
+        clear_type: player.get("clear_type").and_then(Value::as_u64).map(|v| v.min(10) as u8),
+        clear_label: player
+            .get("clear_label")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
     })
 }
 

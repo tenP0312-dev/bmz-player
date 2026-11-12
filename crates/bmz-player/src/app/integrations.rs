@@ -112,7 +112,7 @@ impl WinitApp {
     /// setting, rule mode or BMS-IR login changes, and reports the current screen.
     /// Arena never touches gameplay: it only reads the scene and the config.
     pub(super) fn sync_arena_controller(&mut self, scene_kind: AppSceneKind) {
-        let screen = arena_screen_for_scene(scene_kind);
+        let screen = self.arena_screen(scene_kind);
         let profile = &self.boot.profile_config;
         let wanted = ArenaApplied {
             profile_id: profile.id.clone(),
@@ -407,16 +407,4 @@ pub(in crate::app) fn landmine_se_should_play(
         return false;
     }
     mine_hits.iter().any(|hit| hit.sound.is_none())
-}
-
-/// Arena `state` for an app scene. Practice, autoplay, replay and course play
-/// are reported as plain `play` until the later stages need the difference.
-pub(super) fn arena_screen_for_scene(scene_kind: AppSceneKind) -> crate::arena::ScreenState {
-    use crate::arena::ScreenState;
-    match scene_kind {
-        AppSceneKind::Select => ScreenState::Select,
-        AppSceneKind::Decide => ScreenState::Decide,
-        AppSceneKind::Play => ScreenState::Play,
-        AppSceneKind::Result => ScreenState::Result,
-    }
 }

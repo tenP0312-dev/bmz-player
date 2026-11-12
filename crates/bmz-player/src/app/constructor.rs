@@ -464,6 +464,7 @@ impl WinitApp {
                 applied_arena: None,
                 arena_selected_md5: None,
                 arena_option_choice: None,
+                arena_result_settled: None,
                 arena_answered_check: None,
                 exit_configs_saved: false,
                 exit_prepared: false,

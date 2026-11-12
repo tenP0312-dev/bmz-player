@@ -10,8 +10,12 @@ pub(super) async fn login(
     password: Option<String>,
     base_url: Option<String>,
 ) -> Result<()> {
-    let is_bms_ir = crate::ir::bms_ir::is_bms_ir_provider(provider);
-    let is_rian_ir = crate::ir::rian_ir::is_rian_ir_provider(provider);
+    anyhow::ensure!(
+        crate::ir::bms_ir::is_bms_ir_provider(provider),
+        "provider {provider:?} is not available in this build; only BMS-IR can be used"
+    );
+    let is_bms_ir = true;
+    let is_rian_ir = false;
     let base_url = resolve_login_base_url(profile, provider, base_url.as_deref())?;
     let origin = credential_origin(&base_url)?;
 

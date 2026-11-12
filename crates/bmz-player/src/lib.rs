@@ -37,6 +37,7 @@ mod directory_scan;
 pub mod discord_presence;
 #[cfg(unix)]
 mod external_process;
+pub mod fork_policy;
 pub mod gameplay_runtime;
 pub mod generated_preview;
 pub mod i18n;

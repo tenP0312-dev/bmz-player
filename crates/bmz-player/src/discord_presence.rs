@@ -30,7 +30,7 @@ pub struct DiscordPresenceConfig {
 
 impl DiscordPresenceConfig {
     pub fn from_app_config(config: &DiscordConfig) -> Option<Self> {
-        if !config.enabled {
+        if !crate::fork_policy::DISCORD_PRESENCE_ENABLED || !config.enabled {
             return None;
         }
         Some(Self { show_song_details: config.show_song_details })

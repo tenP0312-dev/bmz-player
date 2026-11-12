@@ -282,6 +282,7 @@ pub struct EguiRunContext<'a, 'practice> {
     pub difficulty_tables: &'a [DifficultyTableRecord],
     pub update_dialog: Option<UpdateDialog<'a>>,
     pub obs_connection_status: &'a crate::obs::ObsConnectionStatus,
+    pub arena: &'a crate::arena::connection::ArenaHandle,
     /// 現在の backend が認識しているゲームパッド一覧。未初期化時は空。
     pub connected_gamepads: &'a [crate::input::gamepad::ConnectedGamepad],
     pub audio_stream_info: Option<&'a bmz_audio::backend::cpal::CpalStreamInfo>,

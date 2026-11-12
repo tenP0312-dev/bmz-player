@@ -291,6 +291,9 @@ pub(super) struct IntegrationRuntimeState {
     pub(super) obs_config_deferred: bool,
     pub(super) obs_controller: Option<crate::obs::ObsController>,
     pub(super) applied_obs_config: ObsConfig,
+    /// BMS-IR Arena connection (B1: connection only).
+    pub(super) arena: crate::arena::ArenaController,
+    pub(super) applied_arena: Option<ArenaApplied>,
     pub(super) exit_configs_saved: bool,
     /// Sparkle の再起動継続前と通常の `exiting` から共有する終了準備の冪等ガード。
     pub(super) exit_prepared: bool,
@@ -438,4 +441,14 @@ impl SongScanRuntime {
                     .any(|root| root.enabled && root.recursive && Path::new(&root.path) == dir)
             })
     }
+}
+
+/// What the running Arena connection was started with. A change restarts it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ArenaApplied {
+    pub(super) profile_id: String,
+    pub(super) enabled: bool,
+    pub(super) rule_mode: bmz_gameplay::rule::RuleMode,
+    /// Changes when the BMS-IR login changes, so a fresh login is picked up.
+    pub(super) bms_ir_last_login_at: Option<i64>,
 }

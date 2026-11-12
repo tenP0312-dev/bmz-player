@@ -15,6 +15,7 @@ pub(in crate::ui) fn build_profile_settings_panel(
         profile_manager,
         key_config,
         profile_root,
+        arena,
         unrestricted,
         text,
     } = context;
@@ -37,6 +38,7 @@ pub(in crate::ui) fn build_profile_settings_panel(
         profile_manager,
         key_config,
         profile_root,
+        arena,
         unrestricted,
         text,
         save_clicked,
@@ -67,6 +69,7 @@ pub(in crate::ui) fn build_profile_settings_panel(
     build_profile_replay_section(ui, &mut section);
     build_profile_system_sound_section(ui, &mut section);
     build_profile_ir_section(ui, &mut section);
+    build_profile_arena_section(ui, &mut section);
     build_profile_ui_section(ui, &mut section);
 
     if let Some(readonly) = readonly_profile {
@@ -103,6 +106,9 @@ mod tests {
         let mut profile_manager = ProfileManagerUiState::default();
         let mut key_config = EguiKeyConfigUiState::default();
         let data = crate::bootstrap::profile_tests::ProfileTestDir::new();
+        let arena =
+            crate::arena::ArenaController::inactive(crate::arena::ConnectionStatus::Disabled)
+                .handle();
         let mut frame = |events| {
             ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
                 build_profile_settings_panel(
@@ -118,6 +124,7 @@ mod tests {
                         profile_manager: &mut profile_manager,
                         key_config: &mut key_config,
                         profile_root: std::path::Path::new("."),
+                        arena: &arena,
                         unrestricted: false,
                         text,
                     },

@@ -58,6 +58,21 @@ pub fn ensure_ir_origin_allowed(base_url: &str, service: &str) -> Result<()> {
     bail!("{service} is not available in this build; only BMS-IR can be used")
 }
 
+/// Fails unless `ws_url` is the BMS-IR origin with a WebSocket scheme
+/// (`wss` for `https`, `ws` for `http`). Arena may connect nowhere else.
+pub fn ensure_arena_url_allowed(ws_url: &str) -> Result<()> {
+    let url = reqwest::Url::parse(ws_url.trim())
+        .map_err(|_| anyhow::anyhow!("BMS-IR Arena URL is invalid"))?;
+    let http_scheme = match url.scheme() {
+        "wss" => "https",
+        "ws" => "http",
+        _ => bail!("BMS-IR Arena needs a WebSocket URL"),
+    };
+    let mut as_http = url.clone();
+    as_http.set_scheme(http_scheme).map_err(|()| anyhow::anyhow!("BMS-IR Arena URL is invalid"))?;
+    ensure_ir_origin_allowed(as_http.as_str(), "BMS-IR Arena")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,6 +93,24 @@ mod tests {
         assert!(
             ensure_ir_origin_allowed(crate::ir::bms_ir::BMS_IR_DEFAULT_BASE_URL, "BMS-IR").is_ok()
         );
+    }
+
+    #[test]
+    fn arena_may_only_reach_the_bms_ir_origin() {
+        let base = crate::ir::bms_ir::BMS_IR_DEFAULT_BASE_URL;
+        let ws = base.replacen("http", "ws", 1) + "/new/arena/ws/client";
+        assert!(ensure_arena_url_allowed(&ws).is_ok(), "{ws}");
+        assert!(ensure_arena_url_allowed("wss://rianir.link/new/arena/ws/client").is_err());
+        assert!(
+            ensure_arena_url_allowed("wss://www.bms-ir.org.evil.test.attacker.com/ws").is_err()
+        );
+        assert!(ensure_arena_url_allowed("https://www.bms-ir.org/new/arena/ws/client").is_err());
+        assert!(ensure_arena_url_allowed("not a url").is_err());
+        // A plain `ws` to the production host is a different origin than its https endpoint.
+        if base.starts_with("https://") {
+            let plain = base.replacen("https://", "ws://", 1) + "/new/arena/ws/client";
+            assert!(ensure_arena_url_allowed(&plain).is_err(), "{plain}");
+        }
     }
 
     #[test]

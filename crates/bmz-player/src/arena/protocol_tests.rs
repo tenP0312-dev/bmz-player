@@ -172,8 +172,8 @@ fn arena_status_reads_rating_and_matches_played_and_ignores_the_rest() {
 #[test]
 fn unknown_types_and_fields_do_not_fail() {
     assert_eq!(
-        parse_server_message(r#"{"type":"nomination_started","deadline":1}"#).unwrap(),
-        ServerMessage::Unknown("nomination_started".into())
+        parse_server_message(r#"{"type":"live","deadline":1}"#).unwrap(),
+        ServerMessage::Unknown("live".into())
     );
     assert_eq!(parse_server_message("{}").unwrap(), ServerMessage::Unknown(String::new()));
     // Unknown extra fields on a known type are ignored.
@@ -187,4 +187,83 @@ fn unknown_types_and_fields_do_not_fail() {
 fn invalid_json_is_an_error() {
     assert!(parse_server_message("not json").is_err());
     assert!(parse_server_message("[1,2]").is_err());
+}
+
+#[test]
+fn match_setup_messages_are_read_with_only_the_named_fields() {
+    use super::{ChartAnnounced, MatchReserved};
+    assert_eq!(
+        parse_server_message(
+            r#"{"type":"match_reserved","match_id":"m1","ruleset_profile":"lr2","ln_mode":"LN",
+            "finish_current_song":true,"rules":{"x":1},"reservation_timeout":30,"extra":0}"#
+        )
+        .unwrap(),
+        ServerMessage::MatchReserved(MatchReserved {
+            match_id: "m1".into(),
+            ruleset_profile: "lr2".into(),
+            ln_mode: "LN".into(),
+            finish_current_song: true,
+            reservation_timeout: Some(30.0),
+        })
+    );
+    assert_eq!(
+        parse_server_message(
+            r#"{"type":"fill_started","deadline":1.5,"player_count":2,"max_players":4}"#
+        )
+        .unwrap(),
+        ServerMessage::FillStarted {
+            deadline: Some(1.5),
+            player_count: Some(2),
+            max_players: Some(4)
+        }
+    );
+    assert_eq!(
+        parse_server_message(r#"{"type":"nomination_started","deadline":9}"#).unwrap(),
+        ServerMessage::NominationStarted { deadline: Some(9.0) }
+    );
+    assert_eq!(
+        parse_server_message(r#"{"type":"nominations_revealed","candidates":[]}"#).unwrap(),
+        ServerMessage::NominationsRevealed
+    );
+    assert_eq!(
+        parse_server_message(
+            r#"{"type":"chart","match_id":"m1","chart":{"md5":"ABCD","title":"t","artist":"a",
+            "totalnotes":1200},"random_seed":5,"ln_mode":1,"load_deadline":3.5}"#
+        )
+        .unwrap(),
+        ServerMessage::Chart(ChartAnnounced {
+            match_id: Some("m1".into()),
+            md5: "abcd".into(),
+            title: "t".into(),
+            artist: "a".into(),
+            totalnotes: Some(1200),
+            random_seed: Some(5),
+            ln_mode: "1".into(),
+            load_deadline: Some(3.5),
+        })
+    );
+    assert_eq!(
+        parse_server_message(r#"{"type":"match_cancelled","reason":"load_timeout"}"#).unwrap(),
+        ServerMessage::MatchCancelled { reason: "load_timeout".into() }
+    );
+    assert_eq!(
+        parse_server_message(r#"{"type":"match_released"}"#).unwrap(),
+        ServerMessage::MatchReleased
+    );
+    assert_eq!(
+        parse_server_message(r#"{"type":"room_status","room_code":"AB12","players":[]}"#).unwrap(),
+        ServerMessage::RoomStatus { room_code: Some("AB12".into()) }
+    );
+}
+
+#[test]
+fn match_setup_messages_without_fields_do_not_fail() {
+    assert_eq!(
+        parse_server_message(r#"{"type":"chart"}"#).unwrap(),
+        ServerMessage::Chart(Default::default())
+    );
+    assert_eq!(
+        parse_server_message(r#"{"type":"room_status"}"#).unwrap(),
+        ServerMessage::RoomStatus { room_code: None }
+    );
 }

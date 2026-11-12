@@ -294,6 +294,9 @@ pub(super) struct IntegrationRuntimeState {
     /// BMS-IR Arena connection (B1: connection only).
     pub(super) arena: crate::arena::ArenaController,
     pub(super) applied_arena: Option<ArenaApplied>,
+    /// Last select-cursor chart and chart check handed to Arena (to send each once).
+    pub(super) arena_selected_md5: Option<String>,
+    pub(super) arena_answered_check: Option<crate::arena::session::ChartCheckRequest>,
     pub(super) exit_configs_saved: bool,
     /// Sparkle の再起動継続前と通常の `exiting` から共有する終了準備の冪等ガード。
     pub(super) exit_prepared: bool,

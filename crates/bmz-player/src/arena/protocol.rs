@@ -67,9 +67,73 @@ pub struct Hello {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientMessage {
     Hello(Hello),
-    Ping { client_time: f64 },
-    State { state: ScreenState, arena_enabled: bool, ready: bool },
+    Ping {
+        client_time: f64,
+    },
+    State {
+        state: ScreenState,
+        arena_enabled: bool,
+        ready: bool,
+    },
     ArenaStatus {},
+    /// Create (no `room_code`) or join (`room_code`) a private room.
+    RoomEntry(RoomEntry),
+    RoomReady {
+        ready: bool,
+    },
+    ChartNominate {
+        match_id: String,
+        chart_hash: String,
+    },
+    ChartNominationSkip {
+        match_id: String,
+    },
+    ChartCheck(ChartCheck),
+}
+
+/// `room_entry`. Only the fields the spec names are sent; the room settings of
+/// section 2 ("fixed settings") have no field names in the spec and are not sent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RoomEntry {
+    pub match_mode: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub room_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub room_password: Option<String>,
+    /// Only when creating.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_format: Option<&'static str>,
+}
+
+impl RoomEntry {
+    pub fn create() -> Self {
+        Self {
+            match_mode: "private",
+            room_code: None,
+            room_password: None,
+            series_format: Some("single"),
+        }
+    }
+
+    pub fn join(room_code: String, room_password: Option<String>) -> Self {
+        Self {
+            match_mode: "private",
+            room_code: Some(room_code),
+            room_password,
+            series_format: None,
+        }
+    }
+}
+
+/// `chart_check`: whether this player has the candidate chart.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ChartCheck {
+    pub match_id: String,
+    pub chart_hash: String,
+    pub available: bool,
+    /// 0 when unknown.
+    pub totalnotes: u32,
+    pub play_mode: u32,
 }
 
 impl ClientMessage {
@@ -108,6 +172,30 @@ pub struct PlayerStatus {
     pub matches_played: Option<u64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MatchReserved {
+    pub match_id: String,
+    pub ruleset_profile: String,
+    /// The spec does not give the JSON type of `ln_mode`; strings and numbers are
+    /// both kept as text.
+    pub ln_mode: String,
+    pub finish_current_song: bool,
+    pub reservation_timeout: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ChartAnnounced {
+    /// Absent when the server does not repeat the match id.
+    pub match_id: Option<String>,
+    pub md5: String,
+    pub title: String,
+    pub artist: String,
+    pub totalnotes: Option<u32>,
+    pub random_seed: Option<i64>,
+    pub ln_mode: String,
+    pub load_deadline: Option<f64>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ServerMessage {
     HelloOk(HelloOk),
@@ -123,6 +211,27 @@ pub enum ServerMessage {
     /// Lobby snapshot. Only the player's own rating is read; other fields
     /// (`waiting_players`, `ranking`, `public_rooms`, `lobby_chat`) are for later stages.
     ArenaStatus(PlayerStatus),
+    /// `room_status`. The spec does not name its fields; only `room_code` is read.
+    RoomStatus {
+        room_code: Option<String>,
+    },
+    MatchReserved(MatchReserved),
+    FillStarted {
+        deadline: Option<f64>,
+        player_count: Option<u32>,
+        max_players: Option<u32>,
+    },
+    NominationStarted {
+        deadline: Option<f64>,
+    },
+    NominationAccepted,
+    NominationsRevealed,
+    /// The chosen chart (`chart`), sent when the match is already loading.
+    Chart(ChartAnnounced),
+    MatchCancelled {
+        reason: String,
+    },
+    MatchReleased,
     /// Any other (or later-stage) message type.
     Unknown(String),
 }
@@ -160,8 +269,62 @@ pub fn parse_server_message(text: &str) -> Result<ServerMessage, serde_json::Err
                     .and_then(Value::as_u64),
             })
         }
+        "room_status" => ServerMessage::RoomStatus {
+            room_code: Some(string("room_code")).filter(|code| !code.is_empty()),
+        },
+        "match_reserved" => ServerMessage::MatchReserved(MatchReserved {
+            match_id: string("match_id"),
+            ruleset_profile: string("ruleset_profile"),
+            ln_mode: text_or_number(object.get("ln_mode")),
+            finish_current_song: object
+                .get("finish_current_song")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            reservation_timeout: number("reservation_timeout"),
+        }),
+        "fill_started" => ServerMessage::FillStarted {
+            deadline: number("deadline"),
+            player_count: number("player_count").map(|v| v as u32),
+            max_players: number("max_players").map(|v| v as u32),
+        },
+        "nomination_started" => ServerMessage::NominationStarted { deadline: number("deadline") },
+        "nomination_accepted" => ServerMessage::NominationAccepted,
+        "nominations_revealed" => ServerMessage::NominationsRevealed,
+        "chart" => {
+            let chart = object.get("chart").and_then(Value::as_object);
+            let chart_text = |key: &str| {
+                chart
+                    .and_then(|c| c.get(key))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned()
+            };
+            ServerMessage::Chart(ChartAnnounced {
+                match_id: Some(string("match_id")).filter(|id| !id.is_empty()),
+                md5: chart_text("md5").to_ascii_lowercase(),
+                title: chart_text("title"),
+                artist: chart_text("artist"),
+                totalnotes: chart
+                    .and_then(|c| c.get("totalnotes"))
+                    .and_then(Value::as_u64)
+                    .map(|v| v as u32),
+                random_seed: object.get("random_seed").and_then(Value::as_i64),
+                ln_mode: text_or_number(object.get("ln_mode")),
+                load_deadline: number("load_deadline"),
+            })
+        }
+        "match_cancelled" => ServerMessage::MatchCancelled { reason: string("reason") },
+        "match_released" => ServerMessage::MatchReleased,
         other => ServerMessage::Unknown(other.to_owned()),
     })
+}
+
+fn text_or_number(value: Option<&Value>) -> String {
+    match value {
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Number(number)) => number.to_string(),
+        _ => String::new(),
+    }
 }
 
 #[cfg(test)]

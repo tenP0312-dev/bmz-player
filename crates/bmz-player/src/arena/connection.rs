@@ -30,6 +30,8 @@ const MAX_INCOMING_BYTES: usize = 1 << 20;
 enum Command {
     SetScreen(ScreenState),
     Reconnect,
+    /// A room, nomination or chart-check event for the session.
+    Session(Event),
     Shutdown,
 }
 
@@ -54,6 +56,51 @@ impl ArenaHandle {
     /// Connect again after a refusal or `replaced`.
     pub fn reconnect(&self) {
         self.send(Command::Reconnect);
+    }
+
+    /// Create a private room (the fixed foundation settings).
+    pub fn create_room(&self) {
+        self.send(Command::Session(Event::RoomCreate));
+    }
+
+    pub fn join_room(&self, code: String, password: Option<String>) {
+        self.send(Command::Session(Event::RoomJoin { code, password }));
+    }
+
+    pub fn set_ready(&self, ready: bool) {
+        self.send(Command::Session(Event::SetReady(ready)));
+    }
+
+    /// Nominate a chart (lowercase hex MD5) while nominations are open.
+    pub fn nominate(&self, md5: String) {
+        self.send(Command::Session(Event::Nominate(md5)));
+    }
+
+    pub fn skip_nomination(&self) {
+        self.send(Command::Session(Event::SkipNomination));
+    }
+
+    /// Answers [`ArenaPanelState::pending_chart_check`].
+    pub fn report_chart_check(
+        &self,
+        match_id: String,
+        md5: String,
+        available: bool,
+        totalnotes: u32,
+        play_mode: u32,
+    ) {
+        self.send(Command::Session(Event::ChartChecked {
+            match_id,
+            md5,
+            available,
+            totalnotes,
+            play_mode,
+        }));
+    }
+
+    /// The chart under the select cursor (lowercase hex MD5), for nominating.
+    pub fn set_selected_chart(&self, md5: Option<String>) {
+        self.send(Command::Session(Event::SetSelectedChart(md5)));
     }
 
     fn send(&self, command: Command) {
@@ -214,6 +261,10 @@ impl Driver {
                 self.feed(Event::ManualReconnect);
                 true
             }
+            Some(Command::Session(event)) => {
+                self.feed(event);
+                true
+            }
         }
     }
 
@@ -348,6 +399,7 @@ impl Driver {
                     }
                     Some(Command::SetScreen(screen)) => pending = self.feed(Event::SetScreen(screen)),
                     Some(Command::Reconnect) => { self.feed(Event::ManualReconnect); }
+                    Some(Command::Session(event)) => pending = self.feed(event),
                 },
                 _ = tick.tick() => pending = self.feed(Event::Tick),
             }

@@ -461,6 +461,8 @@ impl WinitApp {
                     crate::arena::ConnectionStatus::Disabled,
                 ),
                 applied_arena: None,
+                arena_selected_md5: None,
+                arena_answered_check: None,
                 exit_configs_saved: false,
                 exit_prepared: false,
                 last_scene_kind: None,

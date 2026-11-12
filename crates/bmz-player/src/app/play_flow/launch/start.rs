@@ -6,6 +6,13 @@ impl WinitApp {
         chart_id: i64,
         options: &PlayStartOptions,
     ) {
+        self.respawn_play_skin_decode(chart_id, options);
+        self.request_scene_skin(SkinKind::Play);
+    }
+
+    /// Starts decoding the Play skin for this chart and options. It needs the current
+    /// preload, because the skin reads the chart state that preload publishes.
+    pub(super) fn respawn_play_skin_decode(&mut self, chart_id: i64, options: &PlayStartOptions) {
         let play_skin_key_mode = self.play_skin_key_mode_for_chart(chart_id, options);
         let skin_attempt = self.skin_attempt_for_chart(chart_id, options);
         let mut play_skin_runtime_state = lua_runtime_state_for_play(
@@ -28,7 +35,6 @@ impl WinitApp {
             options.session_mode,
             play_skin_runtime_state,
         );
-        self.request_scene_skin(SkinKind::Play);
     }
 
     /// 既に開始済みの preload を維持したまま Play シーンへ入場する。

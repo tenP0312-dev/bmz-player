@@ -542,6 +542,7 @@ mod preload_failure_tests {
             exit: DecideExit::Fadeout,
             snapshot: RenderSnapshot::default(),
             title_override: None,
+            one_bass_checked: false,
         };
         assert!(failed_preload_targets_launch(37544, Some(decide.chart_id), None));
         assert!(!failed_preload_targets_launch(37508, Some(decide.chart_id), None));

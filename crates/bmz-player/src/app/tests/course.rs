@@ -20,6 +20,7 @@ fn course_decide_title_override_preserves_play_metadata_and_course_context() {
             title: "Course Title".to_string(),
             subtitle: String::new(),
         }),
+        one_bass_checked: false,
     };
 
     let decide_snapshot = transition.snapshot_for_render();

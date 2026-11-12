@@ -52,6 +52,7 @@ fn side_keys(key_mode: KeyMode, side: OneBassSide) -> Option<Vec<usize>> {
 }
 
 /// The chart's leftmost key on this side: the lane the bass notes start from.
+#[cfg(test)]
 pub(crate) fn source_lane(key_mode: KeyMode, side: OneBassSide) -> Option<Lane> {
     side_keys(key_mode, side)?.first().map(|&lane| Lane::ALL[lane])
 }

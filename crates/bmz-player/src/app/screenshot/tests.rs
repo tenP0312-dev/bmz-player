@@ -56,6 +56,7 @@ fn screenshot_course_decide_keeps_stage_song_before_course_title_override() {
             title: "Course Title".into(),
             subtitle: String::new(),
         }),
+        one_bass_checked: false,
     };
     let scene = AppSceneSnapshot::Decide(decide.snapshot_for_render());
     let name = screenshot_name(&scene, Some(&decide.snapshot));

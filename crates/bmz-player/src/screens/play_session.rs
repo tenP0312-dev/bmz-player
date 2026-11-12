@@ -481,8 +481,6 @@ pub(crate) const LEGACY_H_RANDOM_THRESHOLD_MS: u32 = 100;
 mod arrange_algorithm;
 #[path = "play_session/arrange/mirror.rs"]
 mod arrange_mirror;
-// Pure calculation; wired to the Decide -> Play transition in a follow-up change.
-#[allow(dead_code)]
 #[path = "play_session/arrange/one_bass.rs"]
 mod arrange_one_bass;
 #[path = "play_session/arrange/permutation.rs"]
@@ -501,10 +499,10 @@ mod seven_to_six;
 mod sp_to_dp;
 
 pub(crate) use arrange_mirror::{CopiedArrangement, mirror_copied_arrangement};
-#[allow(unused_imports)] // wired to the Decide -> Play transition in a follow-up change
+#[cfg(test)]
+pub(crate) use arrange_one_bass::source_lane;
 pub(crate) use arrange_one_bass::{
-    OneBassBase, OneBassSide, one_bass_seed, pressed_target, seed_for_permutation,
-    seed_permutation, source_lane, supports_key_mode,
+    OneBassBase, OneBassSide, one_bass_seed, pressed_target, seed_permutation, supports_key_mode,
 };
 pub(crate) use arrange_pipeline::preview_arrange_pattern;
 pub(crate) use arrange_pipeline::second_player_lane_mask;

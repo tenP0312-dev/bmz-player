@@ -249,23 +249,6 @@ pub(in crate::ui) fn system_sound_path_row(
     });
 }
 
-pub(in crate::ui) fn ir_provider_text_row(ui: &mut egui::Ui, label: &str, value: &mut String) {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        ui.text_edit_singleline(value);
-    });
-}
-
-pub(in crate::ui) fn ir_provider_family(provider: &str) -> &'static str {
-    if crate::ir::bms_ir::is_bms_ir_provider(provider) {
-        crate::ir::bms_ir::BMS_IR_PROVIDER
-    } else if crate::ir::rian_ir::is_rian_ir_provider(provider) {
-        crate::ir::rian_ir::RIAN_IR_PROVIDER
-    } else {
-        crate::ir::bmz_official::BMZ_IR_PROVIDER
-    }
-}
-
 pub(in crate::ui) fn ir_send_policy_label(value: IrSendPolicyConfig) -> &'static str {
     match value {
         IrSendPolicyConfig::UpdateScore => "UPDATE SCORE",

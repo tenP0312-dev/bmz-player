@@ -1,5 +1,6 @@
 use super::*;
 
+mod arena;
 mod core;
 mod display;
 mod ir;
@@ -8,6 +9,7 @@ mod play;
 mod select;
 mod ui;
 
+pub(super) use arena::*;
 pub(super) use core::*;
 pub(super) use display::*;
 pub(super) use ir::*;
@@ -26,6 +28,7 @@ pub(super) struct ProfileSectionContext<'a> {
     pub(super) profile_manager: &'a mut ProfileManagerUiState,
     pub(super) key_config: &'a mut EguiKeyConfigUiState,
     pub(super) profile_root: &'a std::path::Path,
+    pub(super) arena: &'a crate::arena::connection::ArenaHandle,
     pub(super) unrestricted: bool,
     pub(super) text: Localizer,
     pub(super) save_clicked: bool,

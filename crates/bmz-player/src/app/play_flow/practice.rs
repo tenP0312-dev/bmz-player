@@ -153,6 +153,9 @@ impl WinitApp {
     }
 
     pub(super) fn start_chart(&mut self, chart_id: i64) {
+        if self.arena_blocks_normal_start() {
+            return;
+        }
         let Some(chart_id) = self.resolve_play_chart_id(chart_id) else {
             return;
         };
@@ -242,6 +245,9 @@ impl WinitApp {
         cli: PracticeCliOverrides,
         battle_target: Option<crate::screens::play_start::BattleTarget>,
     ) {
+        if self.arena_blocks_normal_start() {
+            return;
+        }
         let Some(chart_id) = self.resolve_play_chart_id(chart_id) else {
             return;
         };

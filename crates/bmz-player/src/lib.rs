@@ -21,6 +21,7 @@ macro_rules! eprintln {
 pub mod animated_bga;
 pub mod app;
 pub mod archive_resources;
+pub mod arena;
 pub mod assist;
 pub mod audio;
 pub mod bootstrap;
@@ -37,6 +38,7 @@ mod directory_scan;
 pub mod discord_presence;
 #[cfg(unix)]
 mod external_process;
+pub mod fork_policy;
 pub mod gameplay_runtime;
 pub mod generated_preview;
 pub mod i18n;

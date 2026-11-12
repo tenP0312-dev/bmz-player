@@ -77,7 +77,7 @@ impl WinitApp {
         self.poll_play_preload();
     }
 
-    pub(super) fn start_chart_with_options(
+    pub(in crate::app) fn start_chart_with_options(
         &mut self,
         chart_id: i64,
         mut options: PlayStartOptions,

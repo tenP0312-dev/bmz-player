@@ -10,8 +10,12 @@ pub(super) async fn login(
     password: Option<String>,
     base_url: Option<String>,
 ) -> Result<()> {
-    let is_bms_ir = crate::ir::bms_ir::is_bms_ir_provider(provider);
-    let is_rian_ir = crate::ir::rian_ir::is_rian_ir_provider(provider);
+    anyhow::ensure!(
+        crate::ir::bms_ir::is_bms_ir_provider(provider),
+        "provider {provider:?} is not available in this build; only BMS-IR can be used"
+    );
+    let is_bms_ir = true;
+    let is_rian_ir = false;
     let base_url = resolve_login_base_url(profile, provider, base_url.as_deref())?;
     let origin = credential_origin(&base_url)?;
 
@@ -344,50 +348,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn custom_login_cannot_store_a_builtin_provider_key() {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let base_url = format!("http://{}", listener.local_addr().unwrap());
-        let server = tokio::spawn(async move {
-            let (mut stream, _) = listener.accept().await.unwrap();
-            let mut request = [0; 4096];
-            assert!(stream.read(&mut request).await.unwrap() > 0);
-            let body = r#"{"provider_key":"bmz-official","access_token":"a","refresh_token":"r","player":{"id":"test"}}"#;
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                body.len()
-            );
-            stream.write_all(response.as_bytes()).await.unwrap();
-        });
+    async fn login_to_a_provider_other_than_bms_ir_is_refused_before_any_request() {
         let data = crate::bootstrap::profile_tests::ProfileTestDir::new();
         let mut boot = data.boot();
-        let origin = credential_origin(crate::ir::bmz_official::BMZ_IR_DEFAULT_BASE_URL).unwrap();
-        let original = IrStoredCredentials {
-            provider: "bmz-official".into(),
-            origin: origin.clone(),
-            account_id: "official".into(),
-            display_name: "Official".into(),
-            access_token: "original".into(),
-            refresh_token: "original-refresh".into(),
-            expires_at: None,
-        };
-        save_credentials(&boot.profile_paths.root_dir, &original).unwrap();
-        let error = login(
-            &boot.profile_paths,
-            &mut boot.profile_config,
-            "custom",
-            "test@example.test",
-            Some("dummy".into()),
-            Some(base_url),
-        )
-        .await
-        .unwrap_err();
-        assert!(error.to_string().contains("reserved for the built-in origin"), "{error:#}");
-        server.await.unwrap();
-        assert_eq!(
-            load_credentials(&boot.profile_paths.root_dir, "bmz-official", &origin).unwrap(),
-            Some(original)
-        );
+        for provider in ["custom", "bmz-official", "rian-ir"] {
+            let error = login(
+                &boot.profile_paths,
+                &mut boot.profile_config,
+                provider,
+                "test@example.test",
+                Some("dummy".into()),
+                Some("https://other-ir.example/".into()),
+            )
+            .await
+            .unwrap_err();
+            assert!(error.to_string().contains("only BMS-IR"), "{provider}: {error:#}");
+        }
+        assert_eq!(boot.profile_config.ir.providers.len(), 1);
     }
 }

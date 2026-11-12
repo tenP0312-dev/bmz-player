@@ -188,6 +188,17 @@ BPMごとの累積落下量（STOP中は一定）と各ノーツのSTOP終了時
 走査前に除きます。`note_retention`でも期限切れの範囲を広げません。
 cacheは不変で、時刻の巻き戻しにも対応し、フレームごとの履歴追加や再積分は行いません。
 
+<a id="ready-first-notes"></a>
+### READYの最初のノーツ表示
+
+`play.ready_first_notes`がONのとき、READY（譜面時刻が負の間）のsnapshotだけを差し替えます。
+`PlayRenderSnapshotCache.ready_first_notes`に、配置適用後の譜面から最初に叩くノーツ
+（Tap・LNの開始。地雷・INVISIBLE・LNの終端は除く）の時刻を1度だけ求めて保持します。
+`PlayfieldProjection::project_at`が、譜面時刻が負の間だけ通常のノーツ・地雷・LNをこの一覧で置き換えます。
+位置はSUDDEN+を出していなければレーン上端、出していればカバーの下端（LIFTを含む）で、
+不透明度は1秒周期で65%〜100%です。gameplay threadのsessionは変更せず、Viewer・動画の書き出し・
+プラクティスは`cache`に一覧を持たないため従来どおりです。叩くノーツがない譜面は一覧を作らず、通常の描画のままです。
+
 入力・判定のpresentation eventは既存sequenceとgame timeを保持します。
 consumerが受領したsequenceまでをacknowledgementで破棄します。
 skin runtimeは既読sequenceを再処理せず、timerはイベントの元時刻から評価します。

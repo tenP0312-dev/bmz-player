@@ -241,6 +241,9 @@ pub struct PlayDefaultsConfig {
     /// 未処理の通常ノートを判定ラインへ滞留させる。
     #[serde(default)]
     pub note_retention: bool,
+    /// ロード後の READY の間だけ、最初に叩くノーツをレーンの上端に表示する（表示のみ）。
+    #[serde(default)]
+    pub ready_first_notes: bool,
     /// 選曲画面で選んだセッション全体のモード。
     ///
     /// 旧 profile の `auto_play` を読み込めるよう Option とし、None の場合だけ

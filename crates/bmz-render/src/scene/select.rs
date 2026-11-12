@@ -176,6 +176,8 @@ pub struct SelectSnapshot {
     pub player_stats: PlayerStatsSnapshot,
     pub selected_score_date_sec: i64,
     pub last_played_at: Option<i64>,
+    /// 直前のプレイでゲージが 0 になった小節位置（skin number 379）。次のプレイ開始まで保持する。
+    pub fail_measure: Option<u32>,
     /// Skin settings embedded in LR2 select skins. None for other skins.
     pub lr2_skin_settings: Option<Lr2SkinSettingsSnapshot>,
 }
@@ -378,6 +380,7 @@ impl Default for SelectSnapshot {
             player_stats: PlayerStatsSnapshot::default(),
             selected_score_date_sec: 0,
             last_played_at: None,
+            fail_measure: None,
             lr2_skin_settings: None,
         }
     }

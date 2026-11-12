@@ -24,6 +24,9 @@ pub(super) struct SelectRuntimeState {
     pub(super) ir_battle: crate::app::select_ir_battle::SelectIrBattleRuntime,
     /// profile 全体の player statistics。Select / Result skin の NUMBER_TOTAL* 系に渡す。
     pub(super) player_stats: PlayerStatsSnapshot,
+    /// 直前のプレイでゲージが 0 になった小節位置（skin number 379）。
+    /// Select に戻った後も保持し、次のプレイ開始（決定）で消す。
+    pub(super) last_fail_measure: Option<u32>,
     /// Result 保存後、選曲リストが score DB を再取得するまで保持する。
     /// Retry で `finished_play` が破棄されても更新必要性を失わないための状態。
     pub(super) score_refresh: SelectScoreRefreshState,

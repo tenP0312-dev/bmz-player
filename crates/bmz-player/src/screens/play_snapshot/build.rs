@@ -266,6 +266,7 @@ pub(crate) fn build_render_state_with_target_and_bga_frames_cached(
         play_elapsed_time,
         operating_time_ms: 0,
         skin_input: Default::default(),
+        fail_measure: session.gauge_zero_measure(),
         skin_attempt: bmz_render::snapshot::SkinAttemptState {
             effective_key_mode: Some(session.primary_key_mode),
             hsfix_index: usize::try_from(session.hsfix_index).ok(),

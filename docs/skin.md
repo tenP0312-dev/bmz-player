@@ -779,7 +779,7 @@ beatorajaの名前を優先します。現在は[BMZ Chart Text Refs](#bmz-chart
 | 248 | `lastplay_minute` | 分、0..59 |
 | 249 | `lastplay_second` | 秒、0..59 |
 | 378 | `score_date`（LR2oraja Endless Dream） | スコアの日時のUnix秒です。SelectとResultの`lastplay_*`（243..249）と同じ最後の保存日時を使います（BESTスコアの日時ではありません）。保存しないプレイ・記録なし・32bitに収まらない値は`0`で、非表示にはしません |
-| 379 | `fail_measure`（LR2oraja Endless Dream） | プレイ中にゲージが0になった最初の時点の、4/4拍子1小節を1とした位置の整数部です（0始まり）。全小節が4/4の譜面ではBMSの小節番号と同じです。FAILEDで終わったかは問わず、続行設定でも値が入ります。値が無いとき、およびBEST CLEAR / SELECT TO UNDERの自動切り替えでは`-1`で、非表示にはしません。Play中の値とSelectに戻った後の保持は未対応です。[仕様](bmsir/SKIN_BEHAVIOR_SPEC.md) |
+| 379 | `fail_measure`（LR2oraja Endless Dream） | プレイ中にゲージが0になった最初の時点の、4/4拍子1小節を1とした位置の整数部です（0始まり）。全小節が4/4の譜面ではBMSの小節番号と同じです。FAILEDで終わったかは問わず、続行設定でも値が入ります。値が無いとき、およびBEST CLEAR / SELECT TO UNDERの自動切り替えでは`-1`で、非表示にはしません。Play中は落ちた直後から値が見え、Result・Selectに戻った後も次のプレイ開始（決定）まで保持します。[仕様](bmsir/SKIN_BEHAVIOR_SPEC.md) |
 
 Selectでは選択中の譜面またはコースの最終保存プレイ日時を返します。BEST更新が
 なくても更新し、Failedや履歴を作らないclear-only保存も含みます。Resultでは

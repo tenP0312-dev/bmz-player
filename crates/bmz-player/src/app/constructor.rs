@@ -303,6 +303,7 @@ impl WinitApp {
                 select_ir: crate::screens::select_ir::SelectIrRanking::default(),
                 ir_battle: crate::app::select_ir_battle::SelectIrBattleRuntime::default(),
                 player_stats,
+                last_fail_measure: None,
                 score_refresh: SelectScoreRefreshState::default(),
                 course_builder: None,
                 select_items,

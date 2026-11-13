@@ -186,7 +186,7 @@ fn floatvalue_draws_in_the_select_screen_too() {
 }
 
 #[test]
-fn floatvalue_shows_result_timing_statistics_in_milliseconds() {
+fn floatvalue_shows_result_timing_statistics_as_integer_milliseconds() {
     let state = SkinDrawState {
         average_timing_ms: Some(2.5),
         stddev_timing_ms: Some(1.25),
@@ -200,8 +200,9 @@ fn floatvalue_shows_result_timing_statistics_in_milliseconds() {
             .map(|(cell, _)| *cell)
             .collect()
     };
-    assert_eq!(cells(374), vec![2, 11, 5, 0]);
-    assert_eq!(cells(376), vec![1, 11, 2, 5]);
+    // 372 / 374 / 376 are the integer part of the ms value (decimals are 373 / 375 / 377).
+    assert_eq!(cells(374), vec![2, 11, 0, 0]);
+    assert_eq!(cells(376), vec![1, 11, 0, 0]);
     assert_eq!(cells(372), vec![7, 5, 0, 11, 0, 0]);
     // Without a result the values are missing and nothing is drawn.
     let none = float_document(r#""ref": 374"#).static_render_items(

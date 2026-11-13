@@ -359,10 +359,11 @@ fn skin_state_float_table_value(ref_id: i32, state: &SkinDrawState) -> Option<f3
             let max = state.total_notes.saturating_mul(2);
             Some(ratio(state.target_ex_score.unwrap_or(0), max))
         }
-        // Result: average display time (ms), average timing error (ms), its deviation (ms).
-        372 => state.average_duration_us.map(|us| us as f32 / 1_000.0),
-        374 => state.average_timing_ms,
-        376 => state.stddev_timing_ms,
+        // Result: the integer part of the average display time / timing error / deviation in
+        // ms, truncated toward zero. The two decimals are 373 / 375 / 377 (spec chapter 11).
+        372 => state.average_duration_us.map(|us| (us / 1_000) as f32),
+        374 => state.average_timing_ms.map(f32::trunc),
+        376 => state.stddev_timing_ms.map(f32::trunc),
         310 => Some(state.hispeed_display.unwrap_or(state.hispeed)),
         1107 => Some(clamped_gauge_value(state)),
         367 => Some(state.select_chart_density),

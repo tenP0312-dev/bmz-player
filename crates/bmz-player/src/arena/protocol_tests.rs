@@ -537,7 +537,14 @@ fn forfeit_resume_and_room_closing_messages_are_read() {
     assert_eq!(
         parse_server_message(r#"{"type":"room_disbanded","reason":"private_room_disbanded"}"#)
             .unwrap(),
-        ServerMessage::RoomDisbanded
+        ServerMessage::RoomDisbanded { match_id: String::new() }
+    );
+    assert_eq!(
+        parse_server_message(
+            r#"{"type":"room_disbanded","match_id":"m1","reason":"private_room_disbanded"}"#
+        )
+        .unwrap(),
+        ServerMessage::RoomDisbanded { match_id: "m1".into() }
     );
     assert_eq!(
         parse_server_message(r#"{"type":"room_kicked","room_code":"ABC123"}"#).unwrap(),

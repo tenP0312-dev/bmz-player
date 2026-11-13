@@ -19,7 +19,8 @@ BMS-IR の本番サーバーは、BMZ の版とビルドが許可リストに入
 2. 試すビルドの `build_hash`（ビルドのコミット `BMZ_BUILD_COMMIT`、40 桁）を、flavor `bmz-player` のビルドの許可リストに入れる。
    `-dirty` や `unknown` のビルドは入れられません。コミット済みの状態でビルドします。
 3. BMS-IR 側の `bmz-player` flavor が本番に入っていること（BMS-Mania/IR#1591）。
-4. 許可リストのキー名・書式は、BMS-IR 側の文書で確認する（このフォークの資料には、flavor ごとのキー名の確定した値がありません。**未確認**）。
+4. 許可リストのキー名は、版が `BMSIR_ARENA_ALLOWED_BMZ_CLIENT_VERSIONS`、ビルドが `BMSIR_ARENA_ALLOWED_BMZ_BUILD_HASHES` です（値はここに書きません）。
+   Arena oraja のキーとは別で、互いの flavor を通しません。BMZ の値が空でも、Arena の `/healthz` は落ちません。
 
 本番に入るまでは、次の「手元のサーバー」で行います。
 
@@ -95,6 +96,8 @@ A と B が接続済みで、選曲画面にいる状態から。
 | 4-5 | サーバーの知らない理由（サーバー側で未登録の理由を返す、または偽のサーバー） | 「試合が取り消されました」だけが出る |
 | 4-6 | 他のプレイヤーから外される（ホストがキック、`match_released`） | 「試合から外されました」。ルームに残る／出るのはサーバーの通知による |
 | 4-7 | ホストがルームを解散する（サーバー側の操作） | 「ホストがルームを解散しました」。窓のルームの表示が消える |
+| 4-8 | 試合中（READY またはプレイ中）にホストがルームを解散する | `room_disbanded`（`match_id` 付き）で「ルームが解散されたため試合が取り消されました」。ESC などのロックが外れ、曲は通常のプレイとして続く（スコア保存・BMS-IR への送信はふだんどおり）。解散後に `final` は送られない |
+| 4-9 | 棄権が確定する／再推薦になる | `forfeit_accepted` と `retry_reason`・`chart_missing` の理由が、6 言語の文で出る（コードは出ない）。知らない理由は汎用の文 |
 
 「9 件」は、`not_enough_players_with_chart`、`load_timeout`、`loaded_longnote_contract_mismatch`、`not_enough_ready_players`、
 `not_enough_option_ready_players`、`not_enough_connected_players`、`not_enough_players_after_withdrawal`、`reservation_timeout`、`server_fault`。

@@ -283,6 +283,10 @@ pub struct ChartCheckRequest {
     pub md5: String,
 }
 
+/// The `match_cancelled` reason the server gives when the room is disbanded
+/// during a match (also used for the same case in `room_disbanded`).
+pub const ROOM_DISBANDED_REASON: &str = "private_room_disbanded";
+
 /// Why the match in view went away.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MatchEnd {
@@ -1279,9 +1283,18 @@ impl ArenaSession {
                 self.match_end = Some(MatchEnd::Forfeited(reason));
                 self.state_message().into_iter().map(Action::Send).collect()
             }
-            ServerMessage::RoomDisbanded => {
+            ServerMessage::RoomDisbanded { match_id } => {
+                // The server cancels the running match (`private_room_disbanded`)
+                // and removes the room. That is a cancelled match: forgetting it
+                // also drops a `final` waiting to be resent, and the app lifts the
+                // play locks. The song itself goes on as a normal play.
+                let had_match = self.current_match.is_some() || !match_id.is_empty();
                 self.forget_room();
-                self.match_end = Some(MatchEnd::RoomDisbanded);
+                self.match_end = Some(if had_match {
+                    MatchEnd::Cancelled(ROOM_DISBANDED_REASON.to_owned())
+                } else {
+                    MatchEnd::RoomDisbanded
+                });
                 Vec::new()
             }
             ServerMessage::RoomKicked => {

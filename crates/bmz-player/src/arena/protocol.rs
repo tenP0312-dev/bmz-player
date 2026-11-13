@@ -535,7 +535,10 @@ pub enum ServerMessage {
         start_at: Option<f64>,
     },
     /// The host disbanded the room.
-    RoomDisbanded,
+    /// `match_id` is empty when no match was running.
+    RoomDisbanded {
+        match_id: String,
+    },
     /// The host removed this player from the room.
     RoomKicked,
     /// Any other (or later-stage) message type.
@@ -729,7 +732,7 @@ pub fn parse_server_message(text: &str) -> Result<ServerMessage, serde_json::Err
             state: string("state"),
             start_at: number("start_at"),
         },
-        "room_disbanded" => ServerMessage::RoomDisbanded,
+        "room_disbanded" => ServerMessage::RoomDisbanded { match_id: string("match_id") },
         "room_kicked" => ServerMessage::RoomKicked,
         other => ServerMessage::Unknown(other.to_owned()),
     })

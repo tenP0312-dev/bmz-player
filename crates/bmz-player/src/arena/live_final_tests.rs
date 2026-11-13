@@ -228,6 +228,31 @@ fn final_is_sent_again_after_a_reconnect_before_state() {
 }
 
 #[test]
+fn room_disbanded_during_a_match_cancels_it_and_drops_the_waiting_final() {
+    let mut session = connected();
+    in_playing(&mut session);
+    // The song ended while offline: a `final` is waiting to be sent again.
+    session.handle(at(11.0), Event::SocketClosed);
+    finish(&mut session, 12.0, values(190, 100, 3, 2, 60), false, 6);
+    assert!(session.panel().current_match.unwrap().pending_final.is_some());
+    session.handle(at(17.0), Event::Tick);
+    session.handle(at(17.0), Event::SocketOpened);
+    recv(&mut session, ServerMessage::RoomDisbanded { match_id: "m1".into() });
+    let panel = session.panel();
+    // No match left (the app lifts the ESC lock from this) and no room.
+    assert!(panel.current_match.is_none());
+    assert!(panel.room.is_none());
+    assert_eq!(panel.match_end, Some(MatchEnd::Cancelled("private_room_disbanded".to_owned())));
+    // Nothing is sent for the song any more, now or after the next reconnect.
+    assert!(sample(&mut session, 18.0, values(190, 100, 3, 2, 60)).is_empty());
+    session.handle(at(19.0), Event::SocketClosed);
+    session.handle(at(24.0), Event::Tick);
+    session.handle(at(24.0), Event::SocketOpened);
+    let messages = sent(&session.handle(at(24.1), Event::Message(hello_ok(""))));
+    assert!(messages.iter().all(|m| json(m)["type"] != "final"));
+}
+
+#[test]
 fn play_ready_is_sent_again_after_a_reconnect_while_waiting_for_the_start() {
     let mut session = connected();
     in_loading(&mut session);
@@ -495,7 +520,7 @@ fn the_server_room_is_followed_after_a_reconnect() {
 fn room_disbanded_and_kicked_clear_the_room() {
     let mut session = connected();
     session.handle(at(1.0), Event::RoomCreate);
-    recv(&mut session, ServerMessage::RoomDisbanded);
+    recv(&mut session, ServerMessage::RoomDisbanded { match_id: String::new() });
     assert!(session.panel().room.is_none());
     assert_eq!(session.panel().match_end, Some(MatchEnd::RoomDisbanded));
     session.handle(at(2.0), Event::RoomCreate);

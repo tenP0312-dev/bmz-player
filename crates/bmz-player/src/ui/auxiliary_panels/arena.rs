@@ -117,9 +117,7 @@ fn build_match_status(
         match end {
             MatchEnd::Cancelled(reason) => ui.label(cancel_reason_text(text, reason)),
             MatchEnd::Released => ui.label(tr!(text, "arena-end-released")),
-            MatchEnd::Forfeited(reason) => {
-                ui.label(tr!(text, "arena-end-forfeited", "reason" => reason.as_str()))
-            }
+            MatchEnd::Forfeited(reason) => ui.label(forfeit_reason_text(text, reason)),
             MatchEnd::RoomDisbanded => ui.label(tr!(text, "arena-end-room-disbanded")),
             MatchEnd::RoomKicked => ui.label(tr!(text, "arena-end-room-kicked")),
         };
@@ -186,9 +184,7 @@ fn build_match_status(
     }
     if current.stage == MatchStage::Nominating {
         if !current.retry_reason.is_empty() {
-            ui.label(
-                tr!(text, "arena-nomination-retry", "reason" => current.retry_reason.as_str()),
-            );
+            ui.label(retry_reason_text(text, &current.retry_reason));
         }
         // `can_nominate` is false when the server wants none from this player
         // (host or rotate policy).
@@ -247,7 +243,41 @@ fn cancel_reason_text(text: Localizer, reason: &str) -> String {
         }
         "reservation_timeout" => tr!(text, "arena-cancel-reservation-timeout"),
         "server_fault" => tr!(text, "arena-cancel-server-fault"),
+        crate::arena::session::ROOM_DISBANDED_REASON => {
+            tr!(text, "arena-cancel-private-room-disbanded")
+        }
         _ => tr!(text, "arena-end-cancelled-unknown"),
+    }
+}
+
+/// The sentence for a `forfeit_accepted.reason`; an unknown one is a plain
+/// "you forfeited" (the code is not shown).
+fn forfeit_reason_text(text: Localizer, reason: &str) -> String {
+    match reason {
+        "player_withdrew" => tr!(text, "arena-end-forfeited-player-withdrew"),
+        "play_aborted" => tr!(text, "arena-end-forfeited-play-aborted"),
+        "disconnect_timeout" => tr!(text, "arena-end-forfeited-disconnect-timeout"),
+        "final_result_timeout" => tr!(text, "arena-end-forfeited-final-result-timeout"),
+        "private_room_kicked" => tr!(text, "arena-end-forfeited-private-room-kicked"),
+        _ => tr!(text, "arena-end-forfeited-unknown"),
+    }
+}
+
+/// The sentence for a nomination `retry_reason` (and the `chart_missing` reason
+/// of `chart_candidate_rejected`); an unknown one asks to nominate again.
+fn retry_reason_text(text: Localizer, reason: &str) -> String {
+    match reason {
+        "free_selection_requires_nomination" => {
+            tr!(text, "arena-nomination-retry-free-selection-requires-nomination")
+        }
+        "free_selection_requires_unique_nomination" => {
+            tr!(text, "arena-nomination-retry-free-selection-requires-unique-nomination")
+        }
+        "no_shared_free_selection_candidate" => {
+            tr!(text, "arena-nomination-retry-no-shared-free-selection-candidate")
+        }
+        "chart_missing" => tr!(text, "arena-nomination-retry-chart-missing"),
+        _ => tr!(text, "arena-nomination-retry-unknown"),
     }
 }
 
@@ -279,7 +309,7 @@ mod cancel_reason_tests {
     use super::*;
     use crate::i18n::AppLocale;
 
-    const KNOWN: [&str; 9] = [
+    const KNOWN: [&str; 10] = [
         "not_enough_players_with_chart",
         "load_timeout",
         "loaded_longnote_contract_mismatch",
@@ -289,7 +319,52 @@ mod cancel_reason_tests {
         "not_enough_players_after_withdrawal",
         "reservation_timeout",
         "server_fault",
+        "private_room_disbanded",
     ];
+    const FORFEIT: [&str; 5] = [
+        "player_withdrew",
+        "play_aborted",
+        "disconnect_timeout",
+        "final_result_timeout",
+        "private_room_kicked",
+    ];
+    const RETRY: [&str; 4] = [
+        "free_selection_requires_nomination",
+        "free_selection_requires_unique_nomination",
+        "no_shared_free_selection_candidate",
+        "chart_missing",
+    ];
+    const LOCALES: [AppLocale; 6] = [
+        AppLocale::Ja,
+        AppLocale::En,
+        AppLocale::Ko,
+        AppLocale::ZhCn,
+        AppLocale::ZhTw,
+        AppLocale::ZhHk,
+    ];
+
+    #[test]
+    fn forfeit_and_retry_reasons_have_sentences_and_unknown_ones_are_generic() {
+        for locale in LOCALES {
+            let text = Localizer::new(locale);
+            let forfeit: fn(Localizer, &str) -> String = forfeit_reason_text;
+            for (reasons, sentence, generic_text) in [
+                (&FORFEIT[..], forfeit, tr!(text, "arena-end-forfeited-unknown")),
+                (&RETRY[..], retry_reason_text, tr!(text, "arena-nomination-retry-unknown")),
+            ] {
+                let mut seen = std::collections::BTreeSet::new();
+                for reason in reasons {
+                    let line = sentence(text, reason);
+                    assert_ne!(line, generic_text, "{locale:?} {reason}");
+                    assert!(!line.contains(reason), "{locale:?} {reason}");
+                    assert!(seen.insert(line), "{locale:?} {reason} duplicated");
+                }
+                let unknown = sentence(text, "brand_new_reason");
+                assert_eq!(unknown, generic_text, "{locale:?}");
+                assert!(!unknown.contains("brand_new_reason"));
+            }
+        }
+    }
 
     #[test]
     fn every_known_reason_has_its_own_sentence_in_every_language() {

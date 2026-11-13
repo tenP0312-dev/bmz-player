@@ -512,9 +512,12 @@ pub enum ServerMessage {
     Prepare(Prepare),
     Start(Start),
     MatchCancelled {
+        match_id: String,
         reason: String,
     },
-    MatchReleased,
+    MatchReleased {
+        match_id: String,
+    },
     /// `live` from the server: everyone's progress.
     LiveSnapshot(LiveSnapshot),
     /// The match is over.
@@ -690,8 +693,10 @@ pub fn parse_server_message(text: &str) -> Result<ServerMessage, serde_json::Err
             start_at: number("start_at"),
             ln_mode: ln_mode_of(object),
         }),
-        "match_cancelled" => ServerMessage::MatchCancelled { reason: string("reason") },
-        "match_released" => ServerMessage::MatchReleased,
+        "match_cancelled" => {
+            ServerMessage::MatchCancelled { match_id: string("match_id"), reason: string("reason") }
+        }
+        "match_released" => ServerMessage::MatchReleased { match_id: string("match_id") },
         "live" => ServerMessage::LiveSnapshot(LiveSnapshot {
             match_id: string("match_id"),
             state: string("state"),

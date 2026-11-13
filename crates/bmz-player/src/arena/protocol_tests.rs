@@ -254,12 +254,18 @@ fn match_setup_messages_are_read_with_only_the_named_fields() {
         })
     );
     assert_eq!(
-        parse_server_message(r#"{"type":"match_cancelled","reason":"load_timeout"}"#).unwrap(),
-        ServerMessage::MatchCancelled { reason: "load_timeout".into() }
+        parse_server_message(
+            r#"{"type":"match_cancelled","match_id":"m1","reason":"load_timeout"}"#
+        )
+        .unwrap(),
+        ServerMessage::MatchCancelled { match_id: "m1".into(), reason: "load_timeout".into() }
     );
     assert_eq!(
-        parse_server_message(r#"{"type":"match_released"}"#).unwrap(),
-        ServerMessage::MatchReleased
+        parse_server_message(
+            r#"{"type":"match_released","match_id":"m1","reason":"player_withdrew"}"#
+        )
+        .unwrap(),
+        ServerMessage::MatchReleased { match_id: "m1".into() }
     );
 }
 

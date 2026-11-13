@@ -251,6 +251,29 @@ fn cancel_reason_text(text: Localizer, reason: &str) -> String {
     }
 }
 
+/// The last match's result: placement, name, EX and clear (`DNF` for a forfeit).
+fn build_match_result(ui: &mut egui::Ui, panel: &ArenaPanelState, text: Localizer) {
+    let Some(result) = &panel.result else {
+        return;
+    };
+    ui.separator();
+    ui.label(tr!(text, "arena-result-title"));
+    for player in &result.players {
+        let mut line = tr!(
+            text,
+            "arena-result-line",
+            "place" => player.placement.map_or_else(|| "-".to_owned(), |place| place.to_string()),
+            "name" => player.name.as_str(),
+            "ex" => player.exscore,
+            "clear" => player.clear_label.as_str()
+        );
+        if Some(player.player_id) == panel.own_player_id {
+            line = format!("> {line}");
+        }
+        ui.label(line);
+    }
+}
+
 #[cfg(test)]
 mod cancel_reason_tests {
     use super::*;
@@ -296,28 +319,5 @@ mod cancel_reason_tests {
         let sentence = cancel_reason_text(text, "brand_new_reason");
         assert_eq!(sentence, tr!(text, "arena-end-cancelled-unknown"));
         assert!(!sentence.contains("brand_new_reason"));
-    }
-}
-
-/// The last match's result: placement, name, EX and clear (`DNF` for a forfeit).
-fn build_match_result(ui: &mut egui::Ui, panel: &ArenaPanelState, text: Localizer) {
-    let Some(result) = &panel.result else {
-        return;
-    };
-    ui.separator();
-    ui.label(tr!(text, "arena-result-title"));
-    for player in &result.players {
-        let mut line = tr!(
-            text,
-            "arena-result-line",
-            "place" => player.placement.map_or_else(|| "-".to_owned(), |place| place.to_string()),
-            "name" => player.name.as_str(),
-            "ex" => player.exscore,
-            "clear" => player.clear_label.as_str()
-        );
-        if Some(player.player_id) == panel.own_player_id {
-            line = format!("> {line}");
-        }
-        ui.label(line);
     }
 }

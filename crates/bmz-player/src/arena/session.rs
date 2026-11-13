@@ -215,6 +215,8 @@ pub struct StartGate {
 
 /// `live` at most once a second (the server drops any closer than 0.2 s).
 pub const LIVE_INTERVAL: Duration = Duration::from_secs(1);
+/// `live` is sent from this many seconds before `start_at` (the server's limit is 2).
+const LIVE_EARLIEST_LEAD: f64 = 1.0;
 
 /// Auto-send of `option_ready` this long before the deadline (spec 3.4 step 8).
 const OPTION_AUTO_SEND_LEAD: f64 = 0.25;
@@ -512,6 +514,13 @@ impl ArenaSession {
         screen_allows && self.room.as_ref().is_some_and(|room| room.ready)
     }
 
+    /// A message names a match, and it is not the one in view. (A missing id
+    /// is not a reason to drop the message.)
+    fn is_other_match(&self, match_id: &str) -> bool {
+        !match_id.is_empty()
+            && self.current_match.as_ref().is_some_and(|current| current.match_id != match_id)
+    }
+
     fn forget_match(&mut self) {
         self.current_match = None;
         self.pending_chart_check = None;
@@ -733,8 +742,7 @@ impl ArenaSession {
                 };
                 // One `play_ready` per match, for the chart `prepare` named. v8
                 // needs the loaded note count (> 0).
-                if self.phase != Phase::Connected
-                    || current.stage != MatchStage::Loading
+                if current.stage != MatchStage::Loading
                     || current.play_ready_sent
                     || current.match_id != match_id
                     || prepare.md5 != md5
@@ -742,8 +750,13 @@ impl ArenaSession {
                 {
                     return Vec::new();
                 }
+                // Loaded while the connection is down: remembered, and said again
+                // after the reconnect (`resend_after_reconnect`).
                 current.play_ready_sent = true;
                 current.total_notes = Some(totalnotes);
+                if self.phase != Phase::Connected {
+                    return Vec::new();
+                }
                 vec![Action::Send(ClientMessage::PlayReady(PlayReady {
                     match_id,
                     chart_hash: md5,
@@ -798,6 +811,13 @@ impl ArenaSession {
             || !current.play_started
             || current.pending_final.is_some()
             || current.last_live_at.is_some_and(|at| now.mono.saturating_sub(at) < LIVE_INTERVAL)
+        {
+            return Vec::new();
+        }
+        // The server refuses `live` more than 2 s before `start_at` (`too_early`).
+        // The clock starts `playstart` before it, so wait for the last second.
+        if let (Some(start_at), Some(offset)) = (current.start_at, self.clock_offset)
+            && now.unix + offset < start_at - LIVE_EARLIEST_LEAD
         {
             return Vec::new();
         }
@@ -1220,7 +1240,9 @@ impl ArenaSession {
                 let Some(current) = self.current_match_for(&match_id) else {
                     return Vec::new();
                 };
-                if state == "countdown"
+                // `playing` too: the start may have passed while the connection was
+                // down. `start_at` is then in the past and the READY gate opens at once.
+                if matches!(state.as_str(), "countdown" | "playing")
                     && matches!(current.stage, MatchStage::Loading | MatchStage::Countdown)
                 {
                     current.stage = MatchStage::Countdown;
@@ -1267,13 +1289,20 @@ impl ArenaSession {
                 self.match_end = Some(MatchEnd::RoomKicked);
                 Vec::new()
             }
-            ServerMessage::MatchCancelled { reason } => {
+            ServerMessage::MatchCancelled { match_id, reason } => {
+                // A late message about another match must not end this one.
+                if self.is_other_match(&match_id) {
+                    return Vec::new();
+                }
                 self.forget_match();
                 self.reset_ready();
                 self.match_end = Some(MatchEnd::Cancelled(reason));
                 self.state_message().into_iter().map(Action::Send).collect()
             }
-            ServerMessage::MatchReleased => {
+            ServerMessage::MatchReleased { match_id } => {
+                if self.is_other_match(&match_id) {
+                    return Vec::new();
+                }
                 self.forget_match();
                 self.reset_ready();
                 self.match_end = Some(MatchEnd::Released);
@@ -1370,16 +1399,22 @@ impl ArenaSession {
         self.session_id = None;
         self.active_match_id = None;
         self.player = None;
-        // A song in progress is kept across the reconnect: its `final` and
-        // `play_ready` have to be said again, and the app keeps playing.
+        // A song in progress, or a load the app already began, is kept across
+        // the reconnect: its `final` and `play_ready` have to be said again, and the
+        // app keeps going (dropping it would let READY run without the start gate).
         let kept = self.current_match.take().filter(|current| {
             matches!(
                 current.stage,
                 MatchStage::Countdown | MatchStage::Playing | MatchStage::Finished
-            ) || (current.stage == MatchStage::Loading && current.play_ready_sent)
+            ) || (current.stage == MatchStage::Loading && current.prepare.is_some())
+        });
+        // A `prepare` the app has not taken yet goes with its match.
+        let pending_prepare = self.pending_prepare.take().filter(|prepare| {
+            kept.as_ref().is_some_and(|current| current.match_id == prepare.match_id)
         });
         self.forget_room();
         self.current_match = kept;
+        self.pending_prepare = pending_prepare;
         self.retry_at = Some((now.mono + delay, now.unix + delay.as_secs_f64()));
     }
 }

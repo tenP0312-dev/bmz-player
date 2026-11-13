@@ -231,6 +231,7 @@ fn final_is_sent_again_after_a_reconnect_before_state() {
 fn play_ready_is_sent_again_after_a_reconnect_while_waiting_for_the_start() {
     let mut session = connected();
     in_loading(&mut session);
+    session.handle(at(2.5), Event::PrepareTaken { match_id: "m1".into() });
     session.handle(
         at(3.0),
         Event::PlayLoaded { match_id: "m1".into(), md5: MD5.into(), totalnotes: 321 },
@@ -273,12 +274,102 @@ fn a_match_the_server_no_longer_has_is_dropped_on_reconnect() {
     assert!(session.panel().current_match.is_none());
 }
 
+fn reconnect(session: &mut ArenaSession, closed: f64, active: &str) -> Vec<ClientMessage> {
+    session.handle(at(closed), Event::SocketClosed);
+    session.handle(at(closed + 5.0), Event::Tick);
+    session.handle(at(closed + 5.0), Event::SocketOpened);
+    sent(&session.handle(at(closed + 5.1), Event::Message(hello_ok(active))))
+}
+
 #[test]
-fn an_unfinished_load_is_not_kept_across_a_reconnect() {
+fn a_load_the_app_began_is_kept_across_a_reconnect() {
+    // Dropping it would leave READY running without the start gate.
     let mut session = connected();
     in_loading(&mut session);
     session.handle(at(4.0), Event::SocketClosed);
-    assert!(session.panel().current_match.is_none());
+    let kept = session.panel();
+    assert_eq!(kept.current_match.unwrap().stage, MatchStage::Loading);
+    assert_eq!(kept.pending_prepare.unwrap().match_id, "m1");
+}
+
+#[test]
+fn a_load_that_finishes_while_offline_says_play_ready_after_the_reconnect() {
+    let mut session = connected();
+    in_loading(&mut session);
+    session.handle(at(3.0), Event::PrepareTaken { match_id: "m1".into() });
+    session.handle(at(4.0), Event::SocketClosed);
+    let offline = session.handle(
+        at(5.0),
+        Event::PlayLoaded { match_id: "m1".into(), md5: MD5.into(), totalnotes: 250 },
+    );
+    assert!(sent(&offline).is_empty());
+    session.handle(at(9.0), Event::Tick);
+    session.handle(at(9.0), Event::SocketOpened);
+    let messages = sent(&session.handle(at(9.1), Event::Message(hello_ok("m1"))));
+    assert_eq!(json(&messages[0])["type"], "play_ready");
+    assert_eq!(json(&messages[0])["totalnotes"], 250);
+    // The repeated `prepare` does not start the song again.
+    recv(&mut session, prepare(2));
+    assert!(session.panel().pending_prepare.is_none());
+}
+
+#[test]
+fn match_resume_playing_opens_the_start_gate_after_a_long_outage() {
+    let mut session = connected();
+    in_loading(&mut session);
+    session.handle(
+        at(3.0),
+        Event::PlayLoaded { match_id: "m1".into(), md5: MD5.into(), totalnotes: 100 },
+    );
+    reconnect(&mut session, 4.0, "m1");
+    recv(
+        &mut session,
+        ServerMessage::MatchResume {
+            match_id: "m1".into(),
+            state: "playing".into(),
+            start_at: Some(1_006.0),
+        },
+    );
+    let panel = session.panel();
+    assert_eq!(panel.start_gate.unwrap().start_at, 1_006.0);
+    assert_eq!(panel.current_match.unwrap().stage, MatchStage::Countdown);
+}
+
+#[test]
+fn cancel_and_release_for_another_match_are_ignored() {
+    let mut session = connected();
+    in_playing(&mut session);
+    recv(
+        &mut session,
+        ServerMessage::MatchCancelled { match_id: "old".into(), reason: "load_timeout".into() },
+    );
+    recv(&mut session, ServerMessage::MatchReleased { match_id: "old".into() });
+    let panel = session.panel();
+    assert_eq!(panel.current_match.unwrap().stage, MatchStage::Playing);
+    assert!(panel.match_end.is_none());
+}
+
+#[test]
+fn live_waits_until_one_second_before_start_at() {
+    let mut session = connected();
+    in_loading(&mut session);
+    session.handle(
+        at(3.0),
+        Event::PlayLoaded { match_id: "m1".into(), md5: MD5.into(), totalnotes: 100 },
+    );
+    recv(
+        &mut session,
+        ServerMessage::Start(Start {
+            match_id: "m1".into(),
+            start_at: Some(1_010.0),
+            ln_mode: "LN".into(),
+        }),
+    );
+    // The clock runs a pre-roll (here 4 s) before the song's 0.
+    session.handle(at(6.0), Event::PlayStarted { match_id: "m1".into() });
+    assert!(sample(&mut session, 6.5, values(0, 0, 0, 0, 0)).is_empty());
+    assert!(sample(&mut session, 8.9, values(0, 0, 0, 0, 0)).is_empty());
+    assert_eq!(sample(&mut session, 9.0, values(0, 0, 0, 0, 0)).len(), 1);
 }
 
 #[test]
@@ -443,7 +534,10 @@ fn a_cancelled_match_while_playing_clears_the_stored_final() {
     let mut session = connected();
     in_playing(&mut session);
     finish(&mut session, 12.0, values(190, 100, 3, 2, 60), false, 6);
-    recv(&mut session, ServerMessage::MatchCancelled { reason: "server_fault".into() });
+    recv(
+        &mut session,
+        ServerMessage::MatchCancelled { match_id: "m1".into(), reason: "server_fault".into() },
+    );
     let panel = session.panel();
     assert!(panel.current_match.is_none());
     assert_eq!(panel.match_end, Some(MatchEnd::Cancelled("server_fault".into())));

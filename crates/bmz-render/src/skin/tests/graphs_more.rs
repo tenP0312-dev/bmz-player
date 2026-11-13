@@ -626,3 +626,47 @@ fn graph_value_exit_hold_progress_follows_the_hold() {
         crate::snapshot::ExitHoldSnapshot { elapsed_ms: Some(300), duration_ms: 1_200 };
     assert!(approx_eq(graph_value(SKIN_REF_BMZ_EXIT_HOLD_PERCENT, &state), 0.25));
 }
+
+#[test]
+fn level_bars_follow_the_selected_chart_level_over_ten() {
+    // Spec 10.1: 103 = level / 10 (not clamped), 105..=109 only for the selected difficulty,
+    // and 0 outside the select screen.
+    let state = SkinDrawState {
+        select_screen: true,
+        select_play_level: 12,
+        difficulty: 3,
+        ..SkinDrawState::default()
+    };
+    assert!(approx_eq(graph_value(103, &state), 1.2));
+    // The property path (`value` / `ref`) follows the original player for 105..=109 too.
+    let rate = |id: i32, state: &SkinDrawState| skin_state_float_number(id, state).unwrap_or(-1.0);
+    assert!(approx_eq(rate(107, &state), 1.2));
+    for other in [105, 106, 108, 109] {
+        assert_eq!(rate(other, &state), 0.0, "bargraph {other}");
+    }
+    let outside = SkinDrawState { select_screen: false, ..state };
+    assert_eq!(graph_value(103, &outside), 0.0);
+    assert_eq!(rate(107, &outside), 0.0);
+}
+
+#[test]
+fn target_progress_bar_uses_the_integer_floor_of_the_projection() {
+    // Spec 10.2: floor(1601 * 3 / 10) = 480 -> 480 / (10 * 2).
+    let state = SkinDrawState {
+        play_screen: true,
+        total_notes: 10,
+        past_notes: 3,
+        target_ex_score: Some(1601),
+        ..SkinDrawState::default()
+    };
+    assert!(approx_eq(graph_value(114, &state), 480.0 / 20.0));
+}
+
+#[test]
+fn ir_rank_numbers_are_missing_without_an_online_ranking() {
+    // Spec 10.3: no ranking -> no value (nothing drawn); rival IR rank 292 / 293 never has one.
+    let state = SkinDrawState::default();
+    for id in [179, 180, 182, 292, 293, 380, 389, 390, 399] {
+        assert_eq!(skin_state_number(id, &state), None, "number {id}");
+    }
+}

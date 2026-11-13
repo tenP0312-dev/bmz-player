@@ -1,26 +1,42 @@
-# BMS-IR Arena（接続の土台・段階 B1）
+# BMS-IR Arena（B1〜B4 の全体）
 
-このフォークは、BMS-IR の対戦サービス Arena に接続できます。
-仕様の全体は [SPEC_ARENA_FOUNDATION.md](SPEC_ARENA_FOUNDATION.md)、運用上の決定は [README](README.md) にあります。
-ここでは、段階 B1（接続の土台）で実装した範囲と、手元での確かめ方をまとめます。
+このフォークは、BMS-IR の対戦サービス Arena に、プライベートルームの 1 曲戦として参加できます。
+仕様の全体は [SPEC_ARENA_FOUNDATION.md](SPEC_ARENA_FOUNDATION.md)、運用上の決定は [README](README.md)、
+サーバーの実際のメッセージは [ARENA_SERVER_MESSAGES.md](ARENA_SERVER_MESSAGES.md)（仕様書と食い違うときはこちらが正）、
+つないだ確認の手順は [ARENA_MANUAL_TEST.md](ARENA_MANUAL_TEST.md) にあります。
 
-## 範囲
+## 今できること
 
-B1 に入るもの:
-
-- プロファイルの設定（既定 OFF）、`hello`、`ping` と時計合わせ、`state` の送信。
-- 20 秒の無通信での切断、再接続、拒否・`replaced` の扱い、最小の表示。
-
-B1 に入らないもの（後の段階）:
-
-- ルーム、推薦、曲の受け渡し、同時スタート、`live` / `final`、結果、棄権（B2 以降）。
-- レート戦、`arena_status` の中身（レートなど）の表示。サーバーの項目名を仕様書で確認できていないためです。
+| 段階 | できること |
+|---|---|
+| B1 接続 | プロファイルごとの ON/OFF（既定 OFF）、`hello`、`ping` と時計合わせ、`state` の送信、切断後の再接続、版の拒否・`replaced` の扱い、レートと対戦数の表示 |
+| B2-1 ルームと推薦 | ルームを作る・コードで入る・抜ける、準備 OK、ホストの設定の送り直し、譜面の推薦とスキップ、決まった譜面の `chart_check`（7KEY のみ） |
+| B2-2 開始 | オプション（1P / 2P の配置、FLIP）の確定、`prepare` を受けて自分で曲を読み込み、`play_ready`、`start_at` に曲の 0 秒を合わせた同時スタート |
+| B3 試合の後半 | `live`（1 秒に 1 回まで）と `final`、プレイ中に抜ける操作のロック、棄権、結果・取り消し・外された・ルーム解散の表示、再接続後の復帰、`state` の区別（`play` / `course` / `practice` / `autoplay` / `replay`） |
+| B4 仕上げ | 取り消し理由 9 件の 6 言語の文、再接続と古いメッセージまわりの直し（[B4 の見直し](#b4-の見直し)）、確認の手順 |
 
 ゲームプレイのスレッド、スコアの保存、リプレイ、IR の provider、G-BATTLE の区分には手を入れていません。
+Arena の 1 曲で当てはめるのは、その曲の `PlayStartOptions` とルール / LN の方針だけで、プロファイルは書き換えません。
+
+## できないこと
+
+- **CN / HCN の部屋**：`ln_mode` が `LN` 以外の部屋の試合は始められず、`forfeit` します（ノーツ数の数え方だけ合わせてあります）。
+- **レート戦**：`queue_entry`、レートの計算・順位。表示するのは `arena_status.player` の `rating`（整数）と `matches_played` だけです。
+- **5/9/10/14KEY**：7KEY だけです。それ以外の譜面は `chart_check` で `available=false`、試合も始めません。
+- 作れる部屋は、土台の固定設定（`exscore`、ゲージ自由、`chart_scope=free`、`LN`、`nomination_policy=all`、1 曲戦）だけです。
+  シリーズ戦（`all_picks` / `first_to` / `bo2`）、`rotate` / `host` の推薦、`custom` の譜面範囲、パスワードの変更は扱いません。
+- 観戦、観戦者の表示、公開ルームの一覧、ロビーのチャット、試合中のチャット（`chat_history` / `chat_send`）。
+- ホストの操作のうち、キック・解散・ホストの移譲・選曲者の指定（BMZ からは送りません。受け取ったときの表示だけ）。
+- 強制終了の投票（`force_end_vote`）、`result.series`、`return_to_select_at`。
+- Arena oraja との対戦（BMZ 同士だけ）。`server_cpu_v1` も送りません。
+- BMZ を終了して開き直したあとの試合への復帰（曲に戻れず、サーバーが切断として棄権にします）。
+- `forfeit` の `reason`（資料に項目が無いので送りません）。
+- `chart` の追加キー、`chat_*` の応答の形は資料でも未確認で、読んでいません。
+- 本番での確認。BMS-IR 側の許可リストへの追加（オペレーターが行う）と、実機・実サーバーの確認はこれからです（[手順](ARENA_MANUAL_TEST.md)）。
 
 ## 設定
 
-「BMZ メニュー → IR」の「BMS-IR Arena」に、接続のスイッチと接続の状態を出します。
+「BMZ メニュー → IR」の「BMS-IR Arena」に、接続のスイッチと接続の状態を出します。選曲画面と結果画面の「Arena」の窓は、接続済みのときだけ出ます。
 
 | 項目 | 値 |
 |---|---|
@@ -28,6 +44,8 @@ B1 に入らないもの（後の段階）:
 | 既定 | `false`（OFF）。OFF の間は何も接続しません |
 | 認証 | IR 設定の BMS-IR のログイン（プレイヤー ID とゲームトークン）を読むだけです。Arena 用の保存場所はありません |
 | ルール | プロファイルのルール。`Lr2Oraja` は `lr2`、`Beatoraja` は `oraja`。`Dx` は Arena では使えません |
+| 接続先 | BMS-IR のホストだけ（下の「接続」）。ビルド時の `BMZ_BMS_IR_BASE_URL` で手元のサーバーへ向けられます |
+| 画面の言語 | BMZ の言語設定（日本語、English、한국어、简体中文、繁體中文（台湾 / 香港））に従います |
 
 設定を変える、プロファイルを切り替える、BMS-IR にログインし直す、のどれでも、接続は自動で作り直します。
 
@@ -72,12 +90,7 @@ B1 に入らないもの（後の段階）:
 
 ## 手元で確かめる
 
-1. 設定が OFF のままで、BMZ を起動して選曲まで進め、Arena のサーバーへ何もつながらないこと（ログに接続の記録がないこと）。
-2. BMS-IR にログインしていない状態で ON にすると、「BMS-IR にログインしていません」と出ること。
-3. BMS-IR にログインして ON にし、サーバー側が BMZ を許可していれば「接続済み」になること。
-   許可前なら「拒否されました。このビルドは更新が必要です」になり、再接続を繰り返さないこと。
-4. 選曲 → 曲を開始 → 結果、と進んでも、プレイとスコア保存が普通に動くこと。
-5. OFF に戻すと、接続が切れて「オフ」になること。
+手順と合格の基準は [ARENA_MANUAL_TEST.md](ARENA_MANUAL_TEST.md) に 1 本にまとめています。
 
 ## 段階 B2-1: ルームと推薦
 
@@ -107,7 +120,7 @@ B2 のうち、ルームの作成・入室、準備 OK、推薦、`chart` と `c
 - 試合 ID と段階で古い応答を捨てます。`chart_check` の答えは、その時点の候補（`match_id` と MD5）と同じときだけ送ります。
 - `match_cancelled` / `match_released` で試合の状態を消し、準備 OK を外します（ルームは残ります）。
 - 切断・`replaced`・拒否でルームと試合の状態を消します。再接続後はサーバーが写しを送り直します。
-  再接続後に自動でルームへ戻る処理はありません（B3 で `active_match_id` と合わせて決めます）。
+  再接続後のルームへの復帰は B3 で入れました（下の「段階 B3」）。
 - `hello_ok` の `active_match_id` が空なら、手元の試合の状態を消します。
 - 試合中は新しいルームへ入れません。
 
@@ -176,7 +189,7 @@ Arena の 1 曲で当てはめるものは、次の 2 か所だけに置きま�
 
 ### 限界と未確認
 
-- `start_at` の精度は 1 フレーム分です（待ちの判定を描画フレームごとに行うため）。実測は B4 で行います。
+- `start_at` の精度は 1 フレーム分です（待ちの判定を描画フレームごとに行うため）。実測は [手順](ARENA_MANUAL_TEST.md)の 5-7 で行います。
 - `start_at` に合わせるのは**曲の 0 秒**です（オペレーター決定 1、Arena oraja と同じ）。BMZ はスキンの `playstart` の分だけ
   曲の 0 秒より前に音声の時計を始めるので、READY を抜ける条件は次の3つがそろったときです：
   READY の演出が終わっている、`play_ready` を送信済み、サーバー時計 ≥ `start_at − playstart`（`arena::launch::may_leave_ready`）。
@@ -249,11 +262,31 @@ Arena の 1 曲で当てはめるものは、次の 2 か所だけに置きま�
 ### 表示
 
 選曲画面と結果画面の Arena パネルに出す：段階（プレイ中、プレイ終了・結果待ち）、全員の進み具合（`live` の写し）、結果（順位・名前・EX・クリア、
-棄権は `DNF`）、取り消しの理由（資料にある理由のコード付き、知らない理由は「取り消されました」だけ）、棄権の確定、ルームの解散・追放。
+棄権は `DNF`）、取り消しの理由（B4 で、資料にある 9 件を 6 言語の文にした。知らない理由は「取り消されました」だけで、コードは出さない）、棄権の確定、ルームの解散・追放。
 
 ### 未確認・しなかったこと
 
 - `chat_history` の要素、`chat_send` の応答、`chart` の追加キーは資料でも未確認なので読んでいない。
 - `force_end_vote`（強制終了）、`result.series`、`return_to_select_at`（BO2）は土台の範囲外。
-- 実サーバーでの `live` / `final` の受け付け、READY 後の `start_at` の精度、RANDOM の並びの一致は実機で確認していない（B4）。
+- 実サーバーでの `live` / `final` の受け付け、READY 後の `start_at` の精度、RANDOM の並びの一致は実機で確認していない（[手順](ARENA_MANUAL_TEST.md)で行う）。
 - `final` の `processed_notes`（`complete`）は `play_ready` の `totalnotes` と同じ基準（LN 1 本 = 1、CN/HCN = 2）。CN/HCN の部屋は始められないので、この基準は LN の部屋でしか試せていない。
+
+## B4 の見直し
+
+B1〜B3 を `ARENA_SERVER_MESSAGES.md` と突き合わせて、次を直しました（すべてテスト付き。`arena/live_final_tests.rs`）。
+
+| 直したもの | 内容 |
+|---|---|
+| 取り消し理由の文面 | `match_cancelled.reason` の 9 件（`not_enough_players_with_chart`、`load_timeout`、`loaded_longnote_contract_mismatch`、`not_enough_ready_players`、`not_enough_option_ready_players`、`not_enough_connected_players`、`not_enough_players_after_withdrawal`、`reservation_timeout`、`server_fault`）を、コードではなく 6 言語の文で出す。資料にあってもこの 9 件に無い理由と、知らない理由は、汎用の「試合が取り消されました」 |
+| 古いメッセージ | `match_cancelled` / `match_released` は `match_id` を読み、今の試合と違えば無視する（遅れて届いた別の試合の通知で、今の試合を消さない） |
+| `match_resume` | `state=playing` も受ける。長く切れて `start` を逃しても、`start_at` が過去なので READY が止まらず始まる |
+| 読み込み中の再接続 | `prepare` を受けて読み込みを始めた試合は、`play_ready` の前でも再接続をまたいで残す（捨てると、手元の READY が開始待ちなしで進んでしまう）。切断中に読み込みが終わったら、再接続後に `play_ready` を送る。app がまだ取っていない `prepare` も残す |
+| `live` の早送り | `start_at` の 1 秒前までは送らない（サーバーは 2 秒より前を `too_early` にする。`playstart` が長いスキンで起きうる） |
+
+見直して**直さなかった**もの（資料に無い、または影響が小さいため）：
+
+- `room_disbanded` が試合中の曲を持つ側に届いたときの扱い：資料に、解散後の試合がどうなるかの記載が無い（手元は部屋と試合を消し、曲は続く）。
+- `forfeit_accepted` の理由と推薦の再推薦の理由は、コードのまま表示している（9 件の取り消しに含まれないため）。
+- 選曲画面のオプション（`play_option`）は、前の試合の値が次の試合の `option_ready` に残りうる（app が各試合のオプション選択で必ず送り直すため、通常は問題にならない）。
+
+環境依存の失敗（外部スキンの素材が無い、OS の言語、`storage::scan`）は、B3 と同じ 30 件で、増えていません。

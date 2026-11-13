@@ -45,6 +45,8 @@ mod sandbox_event;
 mod sandbox_files;
 #[path = "lua/sandbox/io.rs"]
 mod sandbox_io;
+#[path = "lua/sandbox/luaj_compat.rs"]
+mod sandbox_luaj_compat;
 #[path = "lua/sandbox/main_state.rs"]
 mod sandbox_main_state;
 #[path = "lua/sandbox/probe.rs"]
@@ -58,6 +60,7 @@ use sandbox_environment::*;
 use sandbox_event::*;
 use sandbox_files::*;
 use sandbox_io::*;
+use sandbox_luaj_compat::*;
 use sandbox_main_state::*;
 use sandbox_probe::*;
 

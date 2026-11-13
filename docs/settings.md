@@ -314,8 +314,16 @@ Windowsでの高速なファイル探索は[Everything連携](everything.md)を�
 
 仕様は[IR](ir.md)を参照してください。
 
+### BMS-IR Arena（BMS-IRフォーク）
+
+「BMZ メニュー → IR」の「BMS-IR Arena」で、Arenaへの接続をプロファイルごとに切り替えます。
+既定はOFFで、OFFの間は何も接続しません。認証にはIR設定のBMS-IRのログインを使います。
+接続の状態、拒否された理由、「再接続」ボタンを同じ場所に表示します。
+詳細は[BMS-IR Arena](bmsir/ARENA.md)を参照してください。
+
 ## 連携・録画
 
+BMS-IRフォークでは、Discord Rich Presenceは停止しており、有効にしても何も送りません（[BMS-IR専用化](bmsir/BMSIR_ONLY.md)）。
 Discord Rich Presenceは、BMZ PlayerのApplication IDと画像を使います。変更できる項目は、有効にするかどうかと、曲名を表示するかどうかだけです。
 
 ## ツール

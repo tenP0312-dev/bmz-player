@@ -244,6 +244,7 @@ impl WinitApp {
             .as_ref()
             .filter(|_| update_allowed)
             .map(UpdatePrompt::as_dialog);
+        let arena_handle = self.integrations.arena.handle();
         let obs_connection_status = self
             .integrations
             .obs_controller
@@ -289,6 +290,7 @@ impl WinitApp {
                 log_buffer: &self.ui.log_buffer,
                 update_dialog,
                 obs_connection_status: &obs_connection_status,
+                arena: &arena_handle,
                 connected_gamepads: &connected_gamepads,
                 audio_stream_info: self.audio.audio_runtime.as_ref().map(AudioRuntime::stream_info),
                 audio_open_error: self.audio.audio_open_error.as_deref(),

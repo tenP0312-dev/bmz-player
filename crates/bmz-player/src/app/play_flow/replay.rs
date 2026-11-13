@@ -94,6 +94,9 @@ impl WinitApp {
     }
 
     pub(super) fn try_start_replay_from_file(&mut self, path: &std::path::Path) -> bool {
+        if self.arena_blocks_normal_start() {
+            return true;
+        }
         let replay_file = match crate::storage::replay::load_replay(path) {
             Ok(file) => file,
             Err(error) => {
@@ -200,6 +203,9 @@ impl WinitApp {
         slot: u8,
         show_decide: bool,
     ) -> bool {
+        if self.arena_blocks_normal_start() {
+            return true;
+        }
         let chart = match crate::screens::play_session::load_source_chart_for_chart(
             &self.boot.library_db,
             chart_id,
@@ -354,6 +360,9 @@ impl WinitApp {
     }
 
     pub(super) fn try_start_course_replay_for_slot(&mut self, course_id: i64, slot: u8) -> bool {
+        if self.arena_blocks_normal_start() {
+            return true;
+        }
         let Some((stored, identity)) = self.course_identity_with_stored(course_id) else {
             tracing::warn!(course_id, slot, "course identity unavailable for replay slot");
             return false;

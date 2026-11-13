@@ -115,11 +115,7 @@ fn build_match_status(
 ) {
     if let Some(end) = &panel.match_end {
         match end {
-            MatchEnd::Cancelled(reason) if KNOWN_CANCEL_REASONS.contains(&reason.as_str()) => {
-                ui.label(tr!(text, "arena-end-cancelled", "reason" => reason.as_str()))
-            }
-            // An unknown reason is shown as a plain cancellation (spec 3.6).
-            MatchEnd::Cancelled(_) => ui.label(tr!(text, "arena-end-cancelled-unknown")),
+            MatchEnd::Cancelled(reason) => ui.label(cancel_reason_text(text, reason)),
             MatchEnd::Released => ui.label(tr!(text, "arena-end-released")),
             MatchEnd::Forfeited(reason) => {
                 ui.label(tr!(text, "arena-end-forfeited", "reason" => reason.as_str()))
@@ -232,19 +228,76 @@ fn build_match_status(
     }
 }
 
-/// `match_cancelled.reason` values the spec names (3.6); anything else is
-/// shown as a plain cancellation.
-const KNOWN_CANCEL_REASONS: &[&str] = &[
-    "not_enough_players_with_chart",
-    "load_timeout",
-    "loaded_longnote_contract_mismatch",
-    "not_enough_ready_players",
-    "not_enough_option_ready_players",
-    "not_enough_connected_players",
-    "not_enough_players_after_withdrawal",
-    "reservation_timeout",
-    "server_fault",
-];
+/// The sentence for a `match_cancelled.reason`. A reason this build does not
+/// know (the server may add more) is shown as a plain cancellation.
+fn cancel_reason_text(text: Localizer, reason: &str) -> String {
+    match reason {
+        "not_enough_players_with_chart" => tr!(text, "arena-cancel-not-enough-players-with-chart"),
+        "load_timeout" => tr!(text, "arena-cancel-load-timeout"),
+        "loaded_longnote_contract_mismatch" => {
+            tr!(text, "arena-cancel-loaded-longnote-contract-mismatch")
+        }
+        "not_enough_ready_players" => tr!(text, "arena-cancel-not-enough-ready-players"),
+        "not_enough_option_ready_players" => {
+            tr!(text, "arena-cancel-not-enough-option-ready-players")
+        }
+        "not_enough_connected_players" => tr!(text, "arena-cancel-not-enough-connected-players"),
+        "not_enough_players_after_withdrawal" => {
+            tr!(text, "arena-cancel-not-enough-players-after-withdrawal")
+        }
+        "reservation_timeout" => tr!(text, "arena-cancel-reservation-timeout"),
+        "server_fault" => tr!(text, "arena-cancel-server-fault"),
+        _ => tr!(text, "arena-end-cancelled-unknown"),
+    }
+}
+
+#[cfg(test)]
+mod cancel_reason_tests {
+    use super::*;
+    use crate::i18n::AppLocale;
+
+    const KNOWN: [&str; 9] = [
+        "not_enough_players_with_chart",
+        "load_timeout",
+        "loaded_longnote_contract_mismatch",
+        "not_enough_ready_players",
+        "not_enough_option_ready_players",
+        "not_enough_connected_players",
+        "not_enough_players_after_withdrawal",
+        "reservation_timeout",
+        "server_fault",
+    ];
+
+    #[test]
+    fn every_known_reason_has_its_own_sentence_in_every_language() {
+        for locale in [
+            AppLocale::Ja,
+            AppLocale::En,
+            AppLocale::Ko,
+            AppLocale::ZhCn,
+            AppLocale::ZhTw,
+            AppLocale::ZhHk,
+        ] {
+            let text = Localizer::new(locale);
+            let generic = cancel_reason_text(text, "some_future_reason");
+            let mut seen = std::collections::BTreeSet::new();
+            for reason in KNOWN {
+                let sentence = cancel_reason_text(text, reason);
+                assert_ne!(sentence, generic, "{locale:?} {reason}");
+                assert!(!sentence.contains(reason), "{locale:?} {reason}");
+                assert!(seen.insert(sentence), "{locale:?} {reason} is not unique");
+            }
+        }
+    }
+
+    #[test]
+    fn unknown_reason_is_the_generic_sentence_without_the_code() {
+        let text = Localizer::new(AppLocale::Ja);
+        let sentence = cancel_reason_text(text, "brand_new_reason");
+        assert_eq!(sentence, tr!(text, "arena-end-cancelled-unknown"));
+        assert!(!sentence.contains("brand_new_reason"));
+    }
+}
 
 /// The last match's result: placement, name, EX and clear (`DNF` for a forfeit).
 fn build_match_result(ui: &mut egui::Ui, panel: &ArenaPanelState, text: Localizer) {

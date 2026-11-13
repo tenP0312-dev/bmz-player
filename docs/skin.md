@@ -762,10 +762,31 @@ callback内で呼ぶと現在フレームの値を取得します。`local numbe
 `.local/beatoraja`の参照ソースから生成しています。
 `python scripts/generate_skin_property_names.py --check`で参照ソースとの一致を確認できます。
 通常のビルドではチェックイン済みの表を使い、Javaや参照チェックアウトを必要としません。
-`floatvalue`等の新しいスキーマやLua APIはこの対応には含みません。
+`floatvalue`の値の番号は[floatvalue](#floatvalue)に書きます。この対応表には含みません。
 
 BMZ拡張の名前（`bmz_`で始まる名前）は生成表とは別の表で解決し、生成表に同名がある場合は
 beatorajaの名前を優先します。現在は[BMZ Chart Text Refs](#bmz-chart-text-refs)の名前があります。
+
+## floatvalue
+
+小数を画像の数字で出すJSON / Luaの部品です（`docs/bmsir/SKIN_BEHAVIOR_SPEC.md` 5章）。
+
+- 項目：`src` / `x` / `y` / `w` / `h` / `divx` / `divy` / `timer` / `cycle` / `iketa` / `fketa` /
+  `isSignvisible` / `align` / `zeropadding` / `space` / `gain` / `ref` / `value`。
+  `offset`と`padding`は読みません。
+- 画像のマス数（divx × divy）で組を決めます。26の倍数は`isSignvisible`と符号マスつき、
+  24・22の倍数は負の値で後半の組、12・11の倍数は負の値を絶対値で描きます。
+  組が2つ以上あれば、`cycle`でアニメーションします。12マス未満は描きません。
+- 小数は`fketa`桁で切り捨てです。`iketa`と`fketa`の合計が8以上のときは`fketa`を優先して`iketa`を減らします。
+  `zeropadding` 0は数字を左に詰め、空いた桁が右に残ります。`align` 1・2はその分だけ右へ寄せます。
+- `value`があれば`value`、無ければ`ref`を使います。数字のIDはfloat表、無ければrate表の順に探します。
+  Luaの`value = function()`は小数のまま評価します。
+- float表のうち実装済みのID：1102 / 1115 / 155（スコア率）、85〜89（判定率）、183（ベスト率）、
+  122 / 135 / 157（ターゲット率）、310（ハイスピード）、1107（ゲージ）、360 / 362 / 367 / 368（譜面）、
+  165（読み込み）、203〜225の奇数・227・229（IRのクリア率）、285〜289（ライバル判定率）。
+  372 / 374 / 376（リザルトの表示時間・判定ずれの平均と標準偏差）はmsの整数部（0方向へ切り捨て）です。
+  小数2桁は373 / 375 / 377に分かれます（仕様書11章）。
+- 描画は`resolve_destination_items`（プレイ・リザルト・選曲）と選曲バーの部品用の経路で行います。
 
 ## 最終プレイ日時の数値ref
 

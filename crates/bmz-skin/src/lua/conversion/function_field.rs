@@ -96,7 +96,10 @@ pub(super) fn handle_function_field(
             // those writes from the clean runtime VM used by draw callbacks.
             let shared_rank_state =
                 has_shared_result_rank_state(lua, function, metadata.object_id.as_deref());
-            let inferred = if runtime_supported && (compat || shared_rank_state) {
+            // `floatvalue` callbacks return decimals; load-time inference only knows integers.
+            let is_floatvalue = path.contains(".floatvalue[");
+            let inferred = if is_floatvalue || (runtime_supported && (compat || shared_rank_state))
+            {
                 false
             } else {
                 infer_value_field(
@@ -317,7 +320,9 @@ fn infer_value_field(
 }
 
 fn runtime_value_field_supported(path: &str) -> bool {
-    [".value[", ".text[", ".graph[", ".slider["].into_iter().any(|segment| path.contains(segment))
+    [".value[", ".floatvalue[", ".text[", ".graph[", ".slider["]
+        .into_iter()
+        .any(|segment| path.contains(segment))
 }
 
 fn has_shared_result_rank_state(lua: &Lua, function: &Function, object_id: Option<&str>) -> bool {

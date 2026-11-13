@@ -490,6 +490,10 @@ mod skin_interaction;
 mod skin_manifest;
 #[path = "skin/value_helpers/datetime.rs"]
 mod skin_value_datetime;
+#[path = "skin/value_helpers/float_number.rs"]
+mod skin_value_float_number;
+#[path = "skin/value_helpers/float_render.rs"]
+mod skin_value_float_render;
 #[path = "skin/value_helpers/format.rs"]
 mod skin_value_format;
 #[path = "skin/value_helpers/option.rs"]
@@ -504,6 +508,8 @@ use skin_interaction::*;
 pub use skin_manifest::*;
 pub use skin_value_datetime::last_play_datetime_numbers;
 use skin_value_datetime::*;
+use skin_value_float_number::*;
+use skin_value_float_render::*;
 use skin_value_format::*;
 pub use skin_value_option::*;
 use skin_value_rank::*;

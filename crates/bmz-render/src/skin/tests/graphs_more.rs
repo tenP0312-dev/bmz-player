@@ -484,6 +484,7 @@ fn current_score_rate_starts_at_full_rate_before_first_note() {
 fn graph_fill_dimensions_scales_lua_chart_graph_by_dst_multiplier() {
     let graph = SkinGraphDef {
         lr2_distribution: false,
+        lr2_rank_distribution: false,
         id: "default_chart_peak".to_string(),
         value: None,
         src: "graph".to_string(),

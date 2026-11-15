@@ -47,8 +47,9 @@ macro_rules! skin_document_render_select_graph_methods {
             if cell_w <= 0 || cell_h <= 0 {
                 return Vec::new();
             }
+            let distribution_cells: i64 = if graph.lr2_rank_distribution { 28 } else { 11 };
             let animation_frames = if graph.lr2_distribution {
-                i64::from(columns) * i64::from(rows) / 11
+                i64::from(columns) * i64::from(rows) / distribution_cells
             } else {
                 i64::from(rows)
             };
@@ -75,7 +76,7 @@ macro_rules! skin_document_render_select_graph_methods {
             );
             let cell = |lamp_index: usize, rect: Rect| {
                 let index = animation_frame
-                    * if graph.lr2_distribution { 11 } else { i64::from(columns) }
+                    * if graph.lr2_distribution { distribution_cells } else { i64::from(columns) }
                     + lamp_index as i64;
                 let source_x = graph
                     .x
@@ -131,7 +132,12 @@ macro_rules! skin_document_render_select_graph_methods {
                 return items;
             }
 
-            let total: u32 = row.folder_lamp_counts.iter().sum();
+            let counts: &[u32] = if graph.lr2_rank_distribution {
+                &row.folder_rank_counts
+            } else {
+                &row.folder_lamp_counts
+            };
+            let total: u32 = counts.iter().sum();
             if total == 0 {
                 return Vec::new();
             }
@@ -139,8 +145,8 @@ macro_rules! skin_document_render_select_graph_methods {
             let dst = normalize_skin_frame_rect(frame, self.w, self.h);
             let mut items = Vec::new();
             let mut filled = 0.0;
-            for lamp_index in (0..row.folder_lamp_counts.len()).rev() {
-                let count = row.folder_lamp_counts[lamp_index];
+            for lamp_index in (0..counts.len()).rev() {
+                let count = counts[lamp_index];
                 if count == 0 {
                     continue;
                 }

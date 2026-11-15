@@ -249,6 +249,7 @@ fn select_folder_snapshot(
         title: name.to_string(),
         clear_type: summary.map(SelectFolderSummary::clear_type).unwrap_or_default(),
         folder_lamp_counts: summary.map(|summary| summary.lamp_counts).unwrap_or([0; 11]),
+        folder_rank_counts: summary.map(|summary| summary.rank_counts).unwrap_or([0; 28]),
         is_folder: true,
         kind,
         ..SelectRowSnapshot::default()

@@ -333,6 +333,18 @@ pub struct CourseEntryPreview {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectFolderSummary {
     pub lamp_counts: [u32; 11],
+    /// Score-rank distribution (LR2 BAR_GRAPH type 1); see `rank_distribution_index`.
+    pub rank_counts: [u32; 28],
+}
+
+/// EX スコアの率を 27 等分した何番目か（小数切り捨て、100% が 27）。
+/// 未プレイとノーツ数 0 は 0。
+pub fn rank_distribution_index(ex_score: Option<u32>, total_notes: u32) -> usize {
+    let max_ex = u64::from(total_notes) * 2;
+    match ex_score {
+        Some(ex) if max_ex > 0 => (u64::from(ex) * 27 / max_ex).min(27) as usize,
+        _ => 0,
+    }
 }
 
 impl SelectFolderSummary {
@@ -345,6 +357,7 @@ impl SelectFolderSummary {
 impl From<&[SelectChartRow]> for SelectFolderSummary {
     fn from(rows: &[SelectChartRow]) -> Self {
         let mut lamp_counts = [0; 11];
+        let mut rank_counts = [0; 28];
         for row in rows {
             let index = row
                 .best_score
@@ -352,8 +365,13 @@ impl From<&[SelectChartRow]> for SelectFolderSummary {
                 .map(|score| folder_lamp_index_from_clear_type(&score.clear_type))
                 .unwrap_or(0);
             lamp_counts[index] += 1;
+            let notes = row.chart.as_ref().map_or(0, |chart| chart.total_notes);
+            rank_counts[rank_distribution_index(
+                row.best_score.as_ref().map(|score| score.ex_score),
+                notes,
+            )] += 1;
         }
-        Self { lamp_counts }
+        Self { lamp_counts, rank_counts }
     }
 }
 
@@ -443,3 +461,24 @@ impl SelectItem {
 #[cfg(test)]
 #[path = "select_model/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod rank_distribution_tests {
+    use super::rank_distribution_index;
+
+    #[test]
+    fn rank_distribution_index_splits_the_ex_rate_into_27_steps() {
+        // 1000 notes -> max EX 2000.
+        assert_eq!(rank_distribution_index(None, 1000), 0);
+        assert_eq!(rank_distribution_index(Some(0), 1000), 0);
+        assert_eq!(rank_distribution_index(Some(73), 1000), 0);
+        assert_eq!(rank_distribution_index(Some(75), 1000), 1);
+        assert_eq!(rank_distribution_index(Some(1777), 1000), 23);
+        // AAA starts at 8/9 of the max.
+        assert_eq!(rank_distribution_index(Some(1778), 1000), 24);
+        assert_eq!(rank_distribution_index(Some(1999), 1000), 26);
+        assert_eq!(rank_distribution_index(Some(2000), 1000), 27);
+        // No notes: always the first step.
+        assert_eq!(rank_distribution_index(Some(10), 0), 0);
+    }
+}

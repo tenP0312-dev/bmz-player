@@ -119,6 +119,11 @@ pub struct GaugeState {
     pub auto_shift_mode: GaugeAutoShiftMode,
     pub bottom_shiftable_gauge: GaugeType,
     pub gauges: Vec<SingleGaugeState>,
+    /// 0 で落ちるゲージが 0 になったことが一度でもあるか（skin number 379 用）。
+    ///
+    /// 自動切り替えの前の値で判定するため、HARD から GROOVE へ切り替えた後も残る。
+    /// BEST CLEAR / SELECT TO UNDER の自動切り替えでは記録しない。
+    pub reached_zero: bool,
 }
 
 impl GaugeState {
@@ -183,6 +188,7 @@ impl GaugeState {
             auto_shift_mode: GaugeAutoShiftMode::Off,
             bottom_shiftable_gauge: GaugeType::AssistEasy,
             gauges,
+            reached_zero: false,
         }
     }
 
@@ -351,6 +357,7 @@ impl GaugeState {
         for gauge in &mut self.gauges {
             gauge.apply(index, rate);
         }
+        self.note_reached_zero();
         self.auto_shift_if_needed();
     }
 
@@ -360,6 +367,7 @@ impl GaugeState {
         for gauge in &mut self.gauges {
             gauge.apply_mine(damage);
         }
+        self.note_reached_zero();
         self.auto_shift_if_needed();
     }
 
@@ -390,6 +398,23 @@ impl GaugeState {
             }
             self.gauge(*gauge_type).and_then(|gauge| gauge.is_qualified().then_some(gauge))
         })
+    }
+
+    fn note_reached_zero(&mut self) {
+        if self.reached_zero
+            || matches!(
+                self.auto_shift_mode,
+                GaugeAutoShiftMode::BestClear | GaugeAutoShiftMode::SelectToUnder
+            )
+        {
+            return;
+        }
+        let current = self.current();
+        if current.value <= current.definition.min
+            && gauge_closes_play_on_zero(current.definition.gauge_type)
+        {
+            self.reached_zero = true;
+        }
     }
 
     fn auto_shift_if_needed(&mut self) {

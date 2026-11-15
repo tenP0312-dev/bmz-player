@@ -420,3 +420,36 @@ fn practice_round_end_finishes_a_run_whose_notes_were_all_processed() {
     assert_eq!(session.state, PlayState::Failed);
     assert!(session.manually_stopped);
 }
+
+#[test]
+fn measure_position_counts_four_four_measures_not_bar_numbers() {
+    use bmz_chart::model::BarLine;
+    use bmz_core::time::{ChartTick, TimeUs};
+
+    const MEASURE: u64 = bmz_chart::timing::TICKS_PER_MEASURE as u64;
+    let bar = |measure: u32, tick: u64, time: i64| BarLine {
+        measure,
+        tick: ChartTick(tick),
+        time: TimeUs(time),
+    };
+    let position = super::super::state::measure_position_at_time;
+
+    // All 4/4: the position equals the bar number.
+    let lines = [bar(0, 0, 0), bar(1, MEASURE, 2_000_000), bar(2, 2 * MEASURE, 4_000_000)];
+    assert_eq!(position(&lines, TimeUs(-1)), None);
+    assert_eq!(position(&lines, TimeUs(0)), Some(0));
+    assert_eq!(position(&lines, TimeUs(3_999_999)), Some(1));
+    assert_eq!(position(&lines, TimeUs(4_000_000)), Some(2));
+    assert_eq!(position(&lines, TimeUs(99_000_000)), Some(2));
+    assert_eq!(position(&[], TimeUs(0)), None);
+
+    // Measures 000..003 are half length: bar 003 starts at position 1.5 -> 1.
+    let half = MEASURE / 2;
+    let short = [
+        bar(0, 0, 0),
+        bar(1, half, 500_000),
+        bar(2, 2 * half, 1_000_000),
+        bar(3, 3 * half, 1_500_000),
+    ];
+    assert_eq!(position(&short, TimeUs(1_700_000)), Some(1));
+}

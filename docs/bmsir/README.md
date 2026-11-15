@@ -39,3 +39,14 @@ them without access to the BMS-IR repository.
 - E4 as START: follow the Arena oraja behavior described in
   `SPEC_ONE_BASS_INPUT.md`; if the spec leaves it open, count only E1 (START).
 - Credentials files of removed providers (#1): keep them on disk, unread.
+
+## Skin behavior spec decisions (2026-11-12, BMS-Mania/IR#1586)
+
+Spec: `SKIN_BEHAVIOR_SPEC.md` (behavior written from the original players;
+copy of the BMS-IR document). Use it instead of reading oraja code.
+
+1. Numbers 378 / 379 when the value is missing: follow oraja / LR2oraja ED
+   (show the value oraja shows, such as 0 or -1), not BMZ's "hidden".
+2. Text gradient when both names are present: the BMZ name (`colorTop` style)
+   wins; the Arena oraja name (`gradientTopColor` style) is used only when the
+   BMZ name is absent.

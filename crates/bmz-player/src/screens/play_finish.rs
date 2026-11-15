@@ -263,6 +263,8 @@ pub struct FinishSessionSnapshot {
     floating_hispeed_used: bool,
     assist: AssistRuntime,
     battle_opponent: Option<bmz_render::snapshot::OpponentRenderSnapshot>,
+    /// ゲージが 0 になった時点の小節位置（skin number 379）。
+    fail_measure: Option<u32>,
 }
 
 impl FinishSessionSnapshot {
@@ -363,6 +365,7 @@ impl FinishSessionSnapshot {
             floating_hispeed_used: session.floating_hispeed_used,
             assist: session.assist,
             battle_opponent: crate::screens::play_snapshot::final_opponent_render_snapshot(session),
+            fail_measure: session.gauge_zero_measure(),
         }
     }
 }
@@ -527,6 +530,7 @@ fn finish_session_snapshot_result(
     summary.last_played_at =
         score_data_changed.then_some(stored.played_at).filter(|date| *date > 0);
     summary.skin_attempt = snapshot.skin_attempt;
+    summary.fail_measure = snapshot.fail_measure;
     // Result refers to the same pre-save record as its MYBEST score display.
     summary.skin_attempt.best_score_options =
         previous_best.as_ref().and_then(|best| best.play_options);

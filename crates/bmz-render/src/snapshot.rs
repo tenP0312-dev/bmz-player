@@ -331,6 +331,8 @@ pub struct RenderSnapshot {
     pub operating_time_ms: i32,
     pub skin_input: SkinLogicalInputSnapshot,
     pub skin_attempt: SkinAttemptState,
+    /// ゲージが 0 になった時点の小節位置（skin number 379）。None は -1。
+    pub fail_measure: Option<u32>,
     /// READY timer (TIMER_READY=40) elapsed time. None while READY is not active yet.
     pub ready_elapsed_time: Option<TimeUs>,
     /// Play sceneの時計を継続し、ロード表示とREADY timerを再始動しない入場。

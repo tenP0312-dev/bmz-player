@@ -373,6 +373,7 @@ mod tests {
                 },
                 value,
             }],
+            reached_zero: false,
         }
     }
 }

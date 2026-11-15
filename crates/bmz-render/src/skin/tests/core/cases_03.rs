@@ -695,3 +695,28 @@ fn skin_image_index_number_separates_colliding_value_refs() {
     assert_eq!(skin_image_index_number(400, &state), Some(0));
     assert_eq!(skin_state_number(400, &state), Some(3));
 }
+
+#[test]
+fn ed_score_date_and_fail_measure_numbers_378_379() {
+    let mut state = SkinDrawState::default();
+    // No score and no gauge-zero: oraja shows 0 / -1, not a hidden number.
+    assert_eq!(skin_state_number(378, &state), Some(0));
+    assert_eq!(skin_state_number(379, &state), Some(-1));
+
+    // Select and Result both read the last saved play time.
+    state.last_played_at = Some(1_700_000_000);
+    assert_eq!(skin_state_number(378, &state), Some(1_700_000_000));
+    // The BEST score time is a different value and does not feed 378.
+    state.score_date_sec = 1_600_000_000;
+    assert_eq!(skin_state_number(378, &state), Some(1_700_000_000));
+    // A time that does not fit 32 bits falls back to 0 instead of wrapping.
+    state.last_played_at = Some(i64::from(i32::MAX) + 1);
+    assert_eq!(skin_state_number(378, &state), Some(0));
+
+    state.fail_measure = Some(0);
+    assert_eq!(skin_state_number(379, &state), Some(0));
+    state.fail_measure = Some(37);
+    assert_eq!(skin_state_number(379, &state), Some(37));
+    // The IR ranking numbers keep their own range.
+    assert_eq!(skin_state_number(380, &state), None);
+}

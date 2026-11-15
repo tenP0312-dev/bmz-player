@@ -138,6 +138,7 @@ impl WinitApp {
                     chart_sha256: summary.chart_sha256,
                     screen_size: [0, 0],
                     last_played_at: summary.last_played_at,
+                    fail_measure: summary.fail_measure,
                     lr2_progress: if self.result.lr2_result_epoch
                         == Some(self.result.result_scene_started_at)
                     {

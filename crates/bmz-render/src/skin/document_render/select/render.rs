@@ -590,6 +590,7 @@ macro_rules! skin_document_render_select_render_methods {
                 player_stats: snapshot.player_stats.clone(),
                 score_date_sec: snapshot.selected_score_date_sec,
                 last_played_at: snapshot.last_played_at,
+                fail_measure: snapshot.fail_measure,
                 select_assist_index: select_assist_index(&snapshot.assist),
                 assist_flags: snapshot.assist_flags,
                 assist_extra_note_depth: snapshot.assist_extra_note_depth,

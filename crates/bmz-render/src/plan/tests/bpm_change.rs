@@ -121,3 +121,13 @@ fn effective_bpm_preview_keeps_signed_values_and_numeric_color_direction() {
         assert_eq!(lua_main_state_number(SKIN_REF_BMZ_BPM_CHANGE_RATIO_PERCENT, &state), ratio);
     }
 }
+
+#[test]
+fn play_state_carries_fail_measure_for_number_379() {
+    let skin = skin("{}");
+    let state = build_play_skin_state(&RenderSnapshot::default(), &skin, 0);
+    assert_eq!(state.fail_measure, None);
+    let snapshot = RenderSnapshot { fail_measure: Some(12), ..RenderSnapshot::default() };
+    let state = build_play_skin_state(&snapshot, &skin, 0);
+    assert_eq!(state.fail_measure, Some(12));
+}

@@ -279,6 +279,7 @@ pub(super) fn build_result_skin_draw_state(
         opponent_gauge_type: snapshot.battle_opponent.as_ref().map(|opponent| opponent.gauge_type),
         result_failed: Some(snapshot.result_failed),
         last_played_at: snapshot.last_played_at,
+        fail_measure: snapshot.fail_measure,
         autoplay: snapshot.autoplay,
         play_level: skin_level_number(&snapshot.play_level),
         table_song: !snapshot.table_text_primary.is_empty(),

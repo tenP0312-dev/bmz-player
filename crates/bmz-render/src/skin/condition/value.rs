@@ -292,3 +292,132 @@ pub(in crate::skin) fn skin_state_number_expr(expr: &str, state: &SkinDrawState)
     }
     Some(total)
 }
+
+/// Value of a `floatvalue` before `gain`. `None` hides the number.
+pub(in crate::skin) fn skin_float_value(
+    def: &SkinFloatValueDef,
+    state: &SkinDrawState,
+) -> Option<f32> {
+    // `value` wins over `ref`.
+    if let Some(property) = &def.value {
+        return match property {
+            SkinPropertyValue::Id(id) => skin_state_rate_value(*id, state),
+            SkinPropertyValue::Expression(expression) => {
+                if let Some(id) = property.resolve_id(PropertyFamily::Float) {
+                    return skin_state_float_value(id, state);
+                }
+                if let Some(id) = property.resolve_id(PropertyFamily::Rate) {
+                    return skin_state_rate_value(id, state);
+                }
+                skin_float_expression_value(expression, state)
+            }
+        };
+    }
+    if !def.value_expr.trim().is_empty() {
+        return skin_float_expression_value(&def.value_expr, state);
+    }
+    skin_state_float_value(def.ref_id, state)
+}
+
+fn skin_float_expression_value(expression: &str, state: &SkinDrawState) -> Option<f32> {
+    if lua_value_callback_id(expression).is_some() {
+        return evaluate_lua_number_expr(expression, state).map(|number| number as f32);
+    }
+    skin_builtin_value_f32(expression, state).or_else(|| skin_state_float_expr(expression, state))
+}
+
+/// `floatvalue` with a numeric `ref`: the float table first, then the rate table.
+pub(in crate::skin) fn skin_state_float_value(ref_id: i32, state: &SkinDrawState) -> Option<f32> {
+    skin_state_float_table_value(ref_id, state).or_else(|| skin_state_rate_value(ref_id, state))
+}
+
+fn skin_state_rate_value(ref_id: i32, state: &SkinDrawState) -> Option<f32> {
+    skin_state_float_number(ref_id, state)
+}
+
+/// Float-only ids (the rate table is consulted separately).
+fn skin_state_float_table_value(ref_id: i32, state: &SkinDrawState) -> Option<f32> {
+    let notes = judge_rate_total_notes(state);
+    let ratio = |numerator: u32, denominator: u32| -> f32 {
+        if denominator > 0 { numerator as f32 / denominator as f32 } else { 0.0 }
+    };
+    match ref_id {
+        // score_rate: the score rate at the current point of play.
+        1102 => Some(current_score_rate_value(state)),
+        // total_rate / score_rate2: the score over the whole chart.
+        1115 | 155 => Some(ratio(state.ex_score, state.total_notes.saturating_mul(2))),
+        85 => Some(ratio(state.judge_counts.pgreat, notes)),
+        86 => Some(ratio(state.judge_counts.great, notes)),
+        87 => Some(ratio(state.judge_counts.good, notes)),
+        88 => Some(ratio(state.judge_counts.bad, notes)),
+        89 => Some(ratio(state.judge_counts.poor, notes)),
+        183 => {
+            let max = state.total_notes.saturating_mul(2);
+            Some(ratio(result_mybest_ex_score(state).unwrap_or(0), max))
+        }
+        122 | 135 | 157 => {
+            let max = state.total_notes.saturating_mul(2);
+            Some(ratio(state.target_ex_score.unwrap_or(0), max))
+        }
+        // Result: the integer part of the average display time / timing error / deviation in
+        // ms, truncated toward zero. The two decimals are 373 / 375 / 377 (spec chapter 11).
+        372 => state.average_duration_us.map(|us| (us / 1_000) as f32),
+        374 => state.average_timing_ms.map(f32::trunc),
+        376 => state.stddev_timing_ms.map(f32::trunc),
+        310 => Some(state.hispeed_display.unwrap_or(state.hispeed)),
+        1107 => Some(clamped_gauge_value(state)),
+        367 => Some(state.select_chart_density),
+        362 => Some(state.select_chart_end_density),
+        360 => Some(state.select_chart_peak_density),
+        368 => Some(state.select_chart_total_gauge),
+        165 => Some(state.resource_load_progress.clamp(0.0, 1.0)),
+        203..=225 if ref_id % 2 == 1 => ir_clear_rate_value(&state.ir_ranking, ref_id),
+        227 | 229 => ir_clear_rate_value(&state.ir_ranking, ref_id),
+        _ => None,
+    }
+}
+
+fn judge_rate_total_notes(state: &SkinDrawState) -> u32 {
+    if state.select_screen {
+        state.select_total_notes.max(state.total_notes)
+    } else {
+        state.past_notes
+    }
+}
+
+/// IR clear-lamp shares (0..1). The odd ids are the fraction half of the integer ids.
+fn ir_clear_rate_value(ranking: &crate::scene::ResultIrSnapshot, ref_id: i32) -> Option<f32> {
+    if ranking.state != crate::scene::ResultIrState::Loaded {
+        return None;
+    }
+    let Some(counts) = ranking.clear_counts else {
+        // Providers without the population only give a rounded total clear rate.
+        return (ref_id == 227).then(|| ranking.clear_rate.map(|rate| rate as f32 / 100.0))?;
+    };
+    let total: u64 = counts.iter().map(|&count| u64::from(count)).sum();
+    if total == 0 {
+        return Some(0.0);
+    }
+    let count: u64 = match ref_id {
+        227 => counts[2..].iter().map(|&c| u64::from(c)).sum(),
+        229 => counts[8..].iter().map(|&c| u64::from(c)).sum(),
+        _ => {
+            let index = match ref_id - 1 {
+                202 => 0,
+                210 => 1,
+                204 => 2,
+                206 => 3,
+                212 => 4,
+                214 => 5,
+                216 => 6,
+                208 => 7,
+                218 => 8,
+                222 => 9,
+                224 => 10,
+                _ => return None,
+            };
+            u64::from(counts[index])
+        }
+    };
+    Some(count as f32 / total as f32)
+}

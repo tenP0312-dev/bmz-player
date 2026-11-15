@@ -165,3 +165,41 @@ fn result_panel_compat_detects_local_default_without_tab_actions() {
     }
     assert_eq!(runtime.failure_log_count(), 0);
 }
+
+#[test]
+fn lua_floatvalue_callback_keeps_its_decimals() {
+    let root = unique_test_dir("bmz-lua-floatvalue");
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join("skin.luaskin");
+    fs::write(
+        &path,
+        r#"
+        local main_state = require('main_state')
+        return {
+            type = 7,
+            floatvalue = {{id = 'rate', src = 'digits', iketa = 3, fketa = 2, gain = 100,
+                value = function() return main_state.number(71) / 3 end}},
+        }
+    "#,
+    )
+    .unwrap();
+    for mode in [LuaSkinRuntimeMode::Auto, LuaSkinRuntimeMode::Compat] {
+        let mut loaded = load_lua_skin_with_runtime_state(
+            &path,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &LuaLoadRuntimeState { runtime_mode: mode, ..Default::default() },
+        )
+        .unwrap();
+        let def = &loaded.document.floatvalue[0];
+        assert_eq!((def.iketa, def.fketa, def.gain), (3, 2, 100.0), "{mode:?}");
+        let expr = def.value_expr.clone();
+        assert!(expr.starts_with("bmz:lua_value_callback:"), "{mode:?}: {expr}");
+        let callback = expr.rsplit(':').next().unwrap().parse().unwrap();
+        let state = TestLuaMainState { numbers: BTreeMap::from([(71, 1)]), ..Default::default() };
+        let runtime = loaded.lua_runtime.as_mut().unwrap();
+        runtime.begin_frame();
+        let value = runtime.evaluate_number(callback, &state).unwrap();
+        assert!((value - 1.0 / 3.0).abs() < 1e-9, "{mode:?}: {value}");
+    }
+}

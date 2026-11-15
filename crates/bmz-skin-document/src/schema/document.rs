@@ -81,6 +81,9 @@ pub struct SkinDocument {
     pub imageset: Vec<SkinImageSetDef>,
     #[serde(default)]
     pub value: Vec<SkinValueDef>,
+    /// beatoraja `floatvalue`: decimal numbers drawn with a digit image.
+    #[serde(default)]
+    pub floatvalue: Vec<SkinFloatValueDef>,
     #[serde(default)]
     pub text: Vec<SkinTextDef>,
     /// BMZ extension: texture-free solid-color panels.
@@ -535,6 +538,56 @@ pub struct SkinValueDef {
     pub value_expr: String,
     #[serde(default)]
     pub offset: Vec<SkinValueDef>,
+}
+
+/// `floatvalue` object. `iketa` / `fketa` are the integer / fraction digit counts.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct SkinFloatValueDef {
+    #[serde(default, deserialize_with = "deserialize_skin_id")]
+    pub id: String,
+    #[serde(default, deserialize_with = "deserialize_skin_id")]
+    pub src: String,
+    #[serde(default)]
+    pub x: i32,
+    #[serde(default)]
+    pub y: i32,
+    #[serde(default)]
+    pub w: i32,
+    #[serde(default)]
+    pub h: i32,
+    #[serde(default = "default_grid_division")]
+    pub divx: i32,
+    #[serde(default = "default_grid_division")]
+    pub divy: i32,
+    #[serde(default)]
+    pub timer: Option<i32>,
+    #[serde(default)]
+    pub cycle: i32,
+    #[serde(default)]
+    pub iketa: i32,
+    #[serde(default)]
+    pub fketa: i32,
+    #[serde(default, rename = "isSignvisible")]
+    pub sign_visible: bool,
+    #[serde(default)]
+    pub align: i32,
+    #[serde(default)]
+    pub zeropadding: i32,
+    #[serde(default)]
+    pub space: i32,
+    #[serde(default = "default_float_gain")]
+    pub gain: f32,
+    #[serde(default, rename = "ref")]
+    pub ref_id: i32,
+    #[serde(default)]
+    pub value: Option<SkinPropertyValue>,
+    /// Lua `value = function()` converted at load time (runtime callback id expression).
+    #[serde(default)]
+    pub value_expr: String,
+}
+
+fn default_float_gain() -> f32 {
+    1.0
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

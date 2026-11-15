@@ -276,6 +276,11 @@ pub(super) fn required_skin_source_ids(document: &SkinDocument) -> HashSet<&str>
             required.insert(value.src.as_str());
         }
     }
+    for value in &document.floatvalue {
+        if destination_ids.contains(value.id.as_str()) {
+            required.insert(value.src.as_str());
+        }
+    }
     for slider in &document.slider {
         if destination_ids.contains(slider.id.as_str()) {
             required.insert(slider.src.as_str());

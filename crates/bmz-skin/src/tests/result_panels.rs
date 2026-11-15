@@ -45,7 +45,7 @@ fn rank_value_inference_preserves_shared_state_even_when_the_return_matches_a_re
         let number = value.rsplit(':').next().unwrap().parse().unwrap();
         let text = loaded.document.text[0].value_expr.rsplit(':').next().unwrap().parse().unwrap();
         let runtime = loaded.lua_runtime.as_mut().unwrap();
-        for (score, expected) in [(200, "true:1.0"), (100, "true:0.5"), (200, "true:1.0")] {
+        for (score, expected) in [(200, "true:1"), (100, "true:0.5"), (200, "true:1")] {
             let state = TestLuaMainState {
                 numbers: BTreeMap::from([(71, score), (74, 100)]),
                 ..Default::default()

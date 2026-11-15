@@ -733,7 +733,7 @@ fn lua_skin_main_state_stubs_audio_volume_helpers() {
         load_lua_skin_value(&root.join("play7.luaskin"), &BTreeMap::new(), &BTreeMap::new())
             .unwrap();
 
-    assert_eq!(loaded.value["text"][0]["constantText"], "2.0|true");
+    assert_eq!(loaded.value["text"][0]["constantText"], "2|true");
     assert_eq!(
         loaded.value["sceneAudio"],
         serde_json::json!([

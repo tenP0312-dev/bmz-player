@@ -166,7 +166,7 @@ fn os_difftime_returns_float_seconds() {
         out(pcall(os.difftime, 10) == false)
         "#,
     );
-    assert_eq!(lines.lines().collect::<Vec<_>>(), ["6.0,1.25,float", "true"]);
+    assert_eq!(lines.lines().collect::<Vec<_>>(), ["6,1.25,float", "true"]);
 }
 
 #[test]

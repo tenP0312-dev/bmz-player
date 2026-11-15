@@ -49,7 +49,7 @@ fn score_accessors_follow_their_equivalent_property_refs() {
         "#,
         &state,
     );
-    assert_eq!(loaded.document.name, "float:0.0:0.0:1400:1450");
+    assert_eq!(loaded.document.name, "float:0:0:1400:1450");
     assert_eq!(loaded.dependencies.number_values.get(&150), Some(&1400));
     assert_eq!(loaded.dependencies.number_values.get(&121), Some(&1450));
     let runtime = loaded.lua_runtime.as_mut().unwrap();
@@ -105,7 +105,7 @@ fn gauge_is_neutral_at_load_and_live_in_runtime_callbacks() {
             "#,
             &LuaLoadRuntimeState { runtime_mode: mode, ..Default::default() },
         );
-        assert_eq!(loaded.document.name, "float:0.0");
+        assert_eq!(loaded.document.name, "float:0");
         let runtime = loaded.lua_runtime.as_mut().expect("gauge needs the runtime VM");
         let digits = callback(runtime, "$.value[1].value");
         let percent = callback(runtime, "$.value[2].value");

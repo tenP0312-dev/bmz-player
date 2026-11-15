@@ -835,6 +835,7 @@ fn lr2_continue_fallback_assets_win_but_keep_inherited_empty_slots() {
         id: String::new(),
         path: path.into(),
         lr2_color_key: None,
+        corner_color_key: false,
     };
     let inherited = bmz_skin::Lr2ContinueAssets {
         sources: BTreeMap::from([
@@ -934,6 +935,7 @@ fn lr2_continue_theme_fill_keeps_inherited_and_skips_unusable_provider_slots() {
         id: String::new(),
         path: path.into(),
         lr2_color_key: None,
+        corner_color_key: false,
     };
     let current = bmz_skin::Lr2ContinueAssets {
         sources: BTreeMap::from([

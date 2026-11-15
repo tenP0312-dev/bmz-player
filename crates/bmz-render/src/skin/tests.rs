@@ -98,6 +98,11 @@ mod clip_animation;
 mod core;
 #[path = "tests/destination_clip.rs"]
 mod destination_clip;
+#[path = "tests/float_value.rs"]
+mod float_value;
+
+#[path = "tests/gauge_result_stretch.rs"]
+mod gauge_result_stretch;
 #[path = "tests/graphs.rs"]
 mod graphs;
 #[path = "tests/graphs_more.rs"]

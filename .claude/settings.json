@@ -33,10 +33,19 @@
       "PowerShell(bun run test:ir*)",
       "PowerShell(bun run test:i18n *)",
       "PowerShell(bunx vue-tsc *)",
-      "PowerShell(bunx prettier --check *)"
+      "PowerShell(bunx prettier --check *)",
+      "Bash(git push -u origin claude/*)",
+      "Bash(git push origin claude/*)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git branch *)",
+      "Bash(git merge *)",
+      "Bash(apt-get update*)",
+      "Bash(apt-get install *)",
+      "Bash(sudo apt-get *)"
     ],
     "ask": [
-      "Bash(git push *)",
       "PowerShell(git push *)"
     ],
     "deny": [

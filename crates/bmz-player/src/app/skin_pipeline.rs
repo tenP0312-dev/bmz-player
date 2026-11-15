@@ -480,6 +480,7 @@ mod tests {
                         id: "0".into(),
                         path: name.into(),
                         lr2_color_key: Some([0, 255, 0]),
+                        corner_color_key: false,
                     },
                 )]),
                 ..Default::default()

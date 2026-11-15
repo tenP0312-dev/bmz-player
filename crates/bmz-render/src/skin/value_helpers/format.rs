@@ -129,9 +129,7 @@ pub(super) fn lr2_number_animation_frame(value: &SkinValueDef, elapsed_ms: i32) 
 pub(super) fn lr2_number_digits(value: &SkinValueDef, number: i64, align: i32) -> Option<Vec<u8>> {
     let stride = lr2_number_frame_cells(value)?;
     let signed = stride == 24;
-    if number < 0 && !signed {
-        return None;
-    }
+    // Without minus cells (10/11-cell sheets) the sign is dropped: -1 draws "1".
     let width = value.digit.saturating_sub(i32::from(signed)).max(0) as usize;
     if width == 0 {
         return None;

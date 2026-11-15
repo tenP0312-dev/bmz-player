@@ -16,6 +16,7 @@ pub(in crate::ui) struct ProfileSettingsPanelContext<'a> {
     pub(in crate::ui) profile_manager: &'a mut ProfileManagerUiState,
     pub(in crate::ui) key_config: &'a mut EguiKeyConfigUiState,
     pub(in crate::ui) profile_root: &'a std::path::Path,
+    pub(in crate::ui) arena: &'a crate::arena::connection::ArenaHandle,
     pub(in crate::ui) unrestricted: bool,
     pub(in crate::ui) text: Localizer,
 }

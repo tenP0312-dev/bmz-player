@@ -36,6 +36,17 @@ pub struct ProfileConfig {
     pub select: SelectStateConfig,
     #[serde(default)]
     pub statistics: StatisticsConfig,
+    /// BMS-IR Arena connection (BMS-IR fork). Off by default.
+    #[serde(default)]
+    pub arena: ArenaConfig,
+}
+
+/// BMS-IR Arena settings. Holds no credentials: the BMS-IR login is reused.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArenaConfig {
+    /// Connect to BMS-IR Arena. Off by default; while off nothing is sent.
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
@@ -241,6 +252,13 @@ pub struct PlayDefaultsConfig {
     /// 未処理の通常ノートを判定ラインへ滞留させる。
     #[serde(default)]
     pub note_retention: bool,
+    /// ロード後の READY の間だけ、最初に叩くノーツをレーンの上端に表示する（表示のみ）。
+    #[serde(default)]
+    pub ready_first_notes: bool,
+    /// 決定画面の終わりに START (E1) と鍵盤を 1 つ押していると、通常の RANDOM の
+    /// 配置のうち元の 1 鍵のノーツをその鍵盤のレーンへ置く（ワンバス）。既定 OFF。
+    #[serde(default)]
+    pub one_bass_input: bool,
     /// 選曲画面で選んだセッション全体のモード。
     ///
     /// 旧 profile の `auto_play` を読み込めるよう Option とし、None の場合だけ

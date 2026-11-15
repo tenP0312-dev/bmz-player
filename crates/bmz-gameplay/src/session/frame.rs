@@ -84,6 +84,9 @@ pub fn advance_session_frame(
     }
 
     if session.state == PlayState::Playing {
+        if session.hispeed_mode == HispeedMode::Floating {
+            session.floating_hispeed_used = true;
+        }
         sync_judge_windows(session, times.audio_now);
 
         if session.scoring_closed_at.is_some() {

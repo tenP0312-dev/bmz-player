@@ -19,6 +19,9 @@ impl WinitApp {
     }
 
     pub(super) fn begin_decide_for_chart(&mut self, chart_id: i64, mut options: PlayStartOptions) {
+        if self.arena_blocks_normal_start() {
+            return;
+        }
         let Some(chart_id) = self.resolve_play_chart_id(chart_id) else {
             return;
         };
@@ -36,14 +39,19 @@ impl WinitApp {
         );
     }
 
-    pub(super) fn apply_rival_play_overrides(&self, chart_id: i64, options: &mut PlayStartOptions) {
-        options.rival_name = self.select.select_ir.active_rival_display_name().map(str::to_string);
-        if self.boot.profile_config.cli_play.as_ref().is_some_and(|state| {
+    /// The CLI fixed the chart layout (seed, arrange or double option) for this run.
+    pub(super) fn cli_chart_layout_override_active(&self) -> bool {
+        self.boot.profile_config.cli_play.as_ref().is_some_and(|state| {
             state.0.seed.is_some()
                 || ["arrange", "arrange-2p", "double-option"]
                     .iter()
                     .any(|key| state.0.values.contains_key(*key))
-        }) {
+        })
+    }
+
+    pub(super) fn apply_rival_play_overrides(&self, chart_id: i64, options: &mut PlayStartOptions) {
+        options.rival_name = self.select.select_ir.active_rival_display_name().map(str::to_string);
+        if self.cli_chart_layout_override_active() {
             // An explicit CLI chart layout takes priority over profile rival replication.
             return;
         }
@@ -130,6 +138,8 @@ impl WinitApp {
         chart_metadata: Option<ChartListItem>,
         launch: DecideLaunch,
     ) {
+        // number 379 is cleared when the next play (or its decide) starts.
+        self.select.last_fail_measure = None;
         // Pre-import placeholder only: resolve the same AUTO fallback / FORCE
         // priority as preload and account for Battle here. The running session
         // replaces this with a count derived from the imported source chart.
@@ -140,15 +150,7 @@ impl WinitApp {
                 .ok()
                 .and_then(|mut charts| charts.pop())
         });
-        let (ln_policy_setting, rule_mode) = self
-            .play
-            .active_course
-            .as_ref()
-            .map(|course| (course.ln_policy_setting, course.rule_mode))
-            .unwrap_or((
-                self.boot.profile_config.play.ln_mode_policy,
-                self.boot.profile_config.play.rule_mode,
-            ));
+        let (ln_policy_setting, rule_mode) = self.effective_ln_policy_and_rule();
         snapshot.rule_mode_index = crate::skin_extension::rule_mode_index(rule_mode);
         snapshot.ln_score_policy_index = chart_metadata.as_ref().map(|chart| {
             crate::skin_extension::ln_score_policy_index(crate::ln_policy::course_score_ln_policy(
@@ -235,6 +237,7 @@ impl WinitApp {
             exit: DecideExit::Fadeout,
             snapshot,
             title_override,
+            one_bass_checked: false,
         }));
     }
 
@@ -250,18 +253,11 @@ impl WinitApp {
         options.hs_fix = hs_fix_option_from_profile(
             self.boot.profile_config.play_mode_config(play_config_key_mode).hs_fix,
         );
-        let (ln_policy_setting, rule_mode) = self
-            .play
-            .active_course
-            .as_ref()
-            .map(|course| (course.ln_policy_setting, course.rule_mode))
-            .unwrap_or((
-                self.boot.profile_config.play.ln_mode_policy,
-                self.boot.profile_config.play.rule_mode,
-            ));
+        let (ln_policy_setting, rule_mode) = self.effective_ln_policy_and_rule();
         let mut session_options =
             play_session_options_from_start(&self.play_session_app_config(), options);
         session_options.play_config_key_mode = Some(play_config_key_mode);
+        session_options.ready_first_notes = self.boot.profile_config.play.ready_first_notes;
         session_options.ln_policy_setting = ln_policy_setting;
         session_options.rule_mode = rule_mode;
         let source = PlayPreloadSource::Import {
@@ -373,12 +369,7 @@ impl WinitApp {
         } else {
             options.double_option.normalize_for_key_mode(source_key_mode)
         };
-        let ln_policy_setting = self
-            .play
-            .active_course
-            .as_ref()
-            .map(|course| course.ln_policy_setting)
-            .unwrap_or(self.boot.profile_config.play.ln_mode_policy);
+        let (ln_policy_setting, _) = self.effective_ln_policy_and_rule();
         let ln_policy = crate::ln_policy::course_score_ln_policy(
             ln_policy_setting,
             options.ln_mode_override,
@@ -554,15 +545,7 @@ impl WinitApp {
         chart: &ChartListItem,
         options: &PlayStartOptions,
     ) -> ScoreKey {
-        let (ln_policy_setting, rule_mode) = self
-            .play
-            .active_course
-            .as_ref()
-            .map(|course| (course.ln_policy_setting, course.rule_mode))
-            .unwrap_or((
-                self.boot.profile_config.play.ln_mode_policy,
-                self.boot.profile_config.play.rule_mode,
-            ));
+        let (ln_policy_setting, rule_mode) = self.effective_ln_policy_and_rule();
         let source_key_mode = KeyMode::from_str_opt(&chart.mode).unwrap_or_default();
         play_skin_score_key(
             chart.sha256,
@@ -824,6 +807,7 @@ fn apply_rival_score_replication(
             options.arrange_seed = Some(i64::from(seeds.p1.value()));
             options.arrange_seed_2p = seeds.p2.map(|seed| i64::from(seed.value()));
             options.legacy_arrange_seed = false;
+            options.arrange_seed_borrowed = true;
             copied_chart = true;
         } else {
             tracing::warn!(packed, ?key_mode, "ignoring invalid rival play seed");
@@ -860,6 +844,7 @@ fn apply_battle_target_replication(
     if let Some(seed) = arrangement.arrange_seed {
         options.arrange_seed = Some(seed);
         options.arrange_seed_2p = arrangement.arrange_seed_2p;
+        options.arrange_seed_borrowed = true;
         copied_chart = true;
     } else if let Some(packed_seed) = arrangement.packed_seed {
         let unpacked = u64::try_from(packed_seed).ok().and_then(|packed| {
@@ -871,6 +856,7 @@ fn apply_battle_target_replication(
         if let Some(seeds) = unpacked {
             options.arrange_seed = Some(i64::from(seeds.p1.value()));
             options.arrange_seed_2p = seeds.p2.map(|seed| i64::from(seed.value()));
+            options.arrange_seed_borrowed = true;
             copied_chart = true;
         } else {
             tracing::warn!(packed_seed, ?key_mode, "ignoring invalid battle target play seed");

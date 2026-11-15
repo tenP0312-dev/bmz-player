@@ -302,6 +302,7 @@ impl WinitApp {
 
     /// Cancel the unstarted chart without discarding completed course stages.
     pub(super) fn clear_pending_play_start(&mut self) {
+        self.arena_play_abandoned();
         if !self.commit_active_play_lane_state_to_profile() {
             self.commit_pending_play_lane_state_to_profile();
         }
@@ -542,6 +543,7 @@ mod preload_failure_tests {
             exit: DecideExit::Fadeout,
             snapshot: RenderSnapshot::default(),
             title_override: None,
+            one_bass_checked: false,
         };
         assert!(failed_preload_targets_launch(37544, Some(decide.chart_id), None));
         assert!(!failed_preload_targets_launch(37508, Some(decide.chart_id), None));

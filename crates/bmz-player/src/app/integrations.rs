@@ -6,6 +6,7 @@ impl WinitApp {
         // deferred boot解消などでmaintenance可否が変わるため、early returnより前に同期する。
         self.sync_select_maintenance_gate();
         let scene_changed = self.integrations.last_scene_kind != Some(scene_kind);
+        self.sync_arena_controller(scene_kind);
         self.notify_obs_scene(scene_kind);
         if !scene_changed {
             return;
@@ -105,6 +106,78 @@ impl WinitApp {
             .as_ref()
             .map(DiscordPresenceConfig::show_song_details)
             .unwrap_or(self.boot.app_config.discord.show_song_details)
+    }
+
+    /// Starts, restarts or stops the Arena connection when the profile's Arena
+    /// setting, rule mode or BMS-IR login changes, and reports the current screen.
+    /// Arena never touches gameplay: it only reads the scene and the config.
+    pub(super) fn sync_arena_controller(&mut self, scene_kind: AppSceneKind) {
+        let screen = self.arena_screen(scene_kind);
+        let profile = &self.boot.profile_config;
+        let wanted = ArenaApplied {
+            profile_id: profile.id.clone(),
+            enabled: profile.arena.enabled,
+            rule_mode: profile.play.rule_mode,
+            bms_ir_last_login_at: profile
+                .ir
+                .providers
+                .iter()
+                .find(|provider| crate::ir::bms_ir::is_bms_ir_config(provider))
+                .and_then(|provider| provider.last_login_at),
+        };
+        if self.integrations.applied_arena.as_ref() == Some(&wanted) {
+            self.integrations.arena.set_screen(screen);
+            self.sync_arena_match(scene_kind);
+            return;
+        }
+        let controller = crate::arena::start(
+            &self.boot.profile_paths.root_dir,
+            wanted.enabled,
+            wanted.rule_mode,
+            screen,
+        );
+        let previous = std::mem::replace(&mut self.integrations.arena, controller);
+        // Dropping only asks the old thread to stop; it never blocks this thread.
+        drop(previous);
+        tracing::info!(enabled = wanted.enabled, "BMS-IR Arena config applied");
+        self.integrations.applied_arena = Some(wanted);
+    }
+
+    /// Hands Arena the chart under the select cursor and answers its chart check
+    /// from the song library. Reads only; it never starts a play.
+    fn sync_arena_match(&mut self, scene_kind: AppSceneKind) {
+        let handle = self.integrations.arena.handle();
+        let selected = (scene_kind == AppSceneKind::Select)
+            .then(|| match self.select.select_items.get(self.select.selected_index)? {
+                SelectItem::Chart(row) => row.score_md5(),
+                _ => None,
+            })
+            .flatten()
+            .map(|md5| crate::storage::common::hash_to_hex(&md5));
+        if selected != self.integrations.arena_selected_md5 {
+            handle.set_selected_chart(selected.clone());
+            self.integrations.arena_selected_md5 = selected;
+        }
+        self.sync_arena_play(scene_kind);
+        let Some(request) = handle.panel().pending_chart_check else {
+            self.integrations.arena_answered_check = None;
+            return;
+        };
+        if self.integrations.arena_answered_check.as_ref() == Some(&request) {
+            return;
+        }
+        self.integrations.arena_answered_check = Some(request.clone());
+        let library_path = self.boot.app_paths.library_db.clone();
+        std::thread::spawn(move || {
+            let answer = crate::arena::chart_lookup::check_chart(&library_path, &request.md5);
+            handle.report_chart_check(
+                request.match_id,
+                request.md5,
+                answer.available,
+                answer.totalnotes,
+                answer.play_mode,
+            );
+        });
     }
 
     pub(super) fn sync_obs_controller(&mut self) {

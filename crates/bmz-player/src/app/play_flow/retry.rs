@@ -2,6 +2,9 @@ use super::*;
 
 impl WinitApp {
     pub(super) fn retry_last_chart_with_mode(&mut self, mode: ResultRetryMode) {
+        if self.arena_blocks_normal_start() {
+            return;
+        }
         let Some(chart_id) = self.play.last_started_chart_id else {
             tracing::warn!("no previous chart is available to retry");
             return;
@@ -37,6 +40,9 @@ impl WinitApp {
     }
 
     pub(super) fn retry_course_with_mode(&mut self, mode: ResultRetryMode) {
+        if self.arena_blocks_normal_start() {
+            return;
+        }
         let Some(course) = self.result.finished_course.as_ref() else {
             tracing::warn!("no finished course is available to retry");
             return;
@@ -233,6 +239,7 @@ impl WinitApp {
             play_session_options_from_start(&self.play_session_app_config(), options);
         session_options.ln_policy_setting = self.boot.profile_config.play.ln_mode_policy;
         session_options.rule_mode = self.boot.profile_config.play.rule_mode;
+        session_options.ready_first_notes = self.boot.profile_config.play.ready_first_notes;
         self.spawn_play_preload(chart_id, session_options, source);
     }
 

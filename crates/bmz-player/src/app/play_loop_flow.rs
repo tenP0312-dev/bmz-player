@@ -172,6 +172,7 @@ impl WinitApp {
                     ) {
                         Ok(mut finished) => {
                             finished.summary.skin_attempt = active_play.running.skin_attempt;
+                            self.select.last_fail_measure = finished.summary.fail_measure;
                             finished.summary.graph = Arc::new(
                                 active_play
                                     .running
@@ -313,6 +314,7 @@ impl WinitApp {
                     return;
                 };
                 finished.summary.skin_attempt = active_play.running.skin_attempt;
+                self.select.last_fail_measure = finished.summary.fail_measure;
                 active_play.running.pending_finished = None;
                 active_play.running.finished = Some(finished.clone());
                 active_play.running.finish_error = None;
@@ -341,6 +343,9 @@ impl WinitApp {
     }
 
     pub(super) fn maybe_start_ready_phase(&mut self) {
+        // The load is reported as soon as it is done, not after READY: the server's
+        // `start_at` is 5 s after the last `play_ready`.
+        self.arena_report_loaded();
         if self.scene_skin_entry_loading() {
             return;
         }
@@ -426,6 +431,14 @@ impl WinitApp {
         if self.play.play_ready_sound_started_at.is_some_and(|start| {
             start.elapsed().as_micros() < self.play.presentation.extra_ready_hold_us.max(0) as u128
         }) {
+            return;
+        }
+        // An Arena song stays in READY until `play_ready` was sent and the server
+        // clock puts the chart's 0 at `start_at` (the clock starts one skin
+        // `playstart` earlier).
+        let playstart_lead_us = (-self.play_skin_playstart_offset().0).max(0);
+        if self.arena_start_gate(playstart_lead_us) == super::arena_flow::ArenaStartGate::Hold {
+            self.update_pending_play_snapshot_timers();
             return;
         }
         let chart_zero_time = self
@@ -730,6 +743,11 @@ impl WinitApp {
     }
 
     pub(super) fn stop_play_like_escape(&mut self, reason: &'static str) -> bool {
+        // An Arena match song cannot be left once it has started.
+        if self.arena_locks_play_exit() {
+            tracing::info!(reason, "arena: leaving the match song is locked");
+            return true;
+        }
         if self.viewer_mode {
             return self.begin_viewer_exit_transition(reason);
         }

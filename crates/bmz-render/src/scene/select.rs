@@ -176,6 +176,8 @@ pub struct SelectSnapshot {
     pub player_stats: PlayerStatsSnapshot,
     pub selected_score_date_sec: i64,
     pub last_played_at: Option<i64>,
+    /// 直前のプレイでゲージが 0 になった小節位置（skin number 379）。次のプレイ開始まで保持する。
+    pub fail_measure: Option<u32>,
     /// Skin settings embedded in LR2 select skins. None for other skins.
     pub lr2_skin_settings: Option<Lr2SkinSettingsSnapshot>,
 }
@@ -378,6 +380,7 @@ impl Default for SelectSnapshot {
             player_stats: PlayerStatsSnapshot::default(),
             selected_score_date_sec: 0,
             last_played_at: None,
+            fail_measure: None,
             lr2_skin_settings: None,
         }
     }
@@ -467,6 +470,9 @@ pub struct SelectRowSnapshot {
     /// beatoraja DirectoryBar-style lamp distribution for folder rows.
     /// Indexes match SkinBar BARLAMP IDs: 0 no play, 1 failed, ... 10 max.
     pub folder_lamp_counts: [u32; 11],
+    /// Score-rank distribution for LR2 BAR_GRAPH type 1. Index k is the EX rate
+    /// split into 27 steps (k = floor(rate * 27)); 0 also holds unplayed charts.
+    pub folder_rank_counts: [u32; 28],
     /// Chart download progress for chart rows, drawn with the songlist `graph`
     /// images as in LR2oraja Endless Dream. `None` hides it.
     pub download_progress: Option<SelectRowDownloadProgress>,
@@ -576,6 +582,7 @@ impl Default for SelectRowSnapshot {
             chart_distribution: Vec::new(),
             chart_bpm_graph_segments: Vec::new(),
             folder_lamp_counts: [0; 11],
+            folder_rank_counts: [0; 28],
             download_progress: None,
             is_folder: false,
             kind: SelectRowKind::default(),

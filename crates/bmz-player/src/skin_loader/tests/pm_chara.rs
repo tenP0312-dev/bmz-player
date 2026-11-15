@@ -313,3 +313,76 @@ fn real_simple_play_loads_bga_gauge_mascots_and_pm_chara_when_available() {
         decoded.sources.iter().any(|source| source.source_id == motion.source_id)
     }));
 }
+
+#[test]
+fn pm_chara_character_image_clears_the_corner_pixel_color_but_the_icon_keeps_it() {
+    let root = unique_test_dir("bmz-player-pmchara-corner-key");
+    let character_dir = root.join("character");
+    fs::create_dir_all(&character_dir).unwrap();
+    fs::write(
+        character_dir.join("sample.chp"),
+        b"#CharBMP character.png\n#SelectCG icon.png\n#Anime 100\n#Size 2 1\n#00 0 0 2 1\n#01 0 0 2 1\n#Pattern 01 00\n",
+    )
+    .unwrap();
+    // Left: a body color. Right (the corner): the background color.
+    for name in ["character.png", "icon.png"] {
+        let mut image = image::RgbaImage::from_pixel(2, 1, image::Rgba([200, 10, 10, 255]));
+        image.put_pixel(1, 0, image::Rgba([7, 8, 9, 255]));
+        image.save(character_dir.join(name)).unwrap();
+    }
+    let entry = root.join("play7.json");
+    fs::write(
+        &entry,
+        serde_json::json!({
+            "type": 0,
+            "source": [{"id": "pm-source", "path": "character"}],
+            "pmchara": [
+                {"id": "body", "src": "pm-source", "type": 0, "color": 1},
+                {"id": "icon", "src": "pm-source", "type": 5, "color": 1}
+            ],
+            "destination": [
+                {"id": "body", "dst": [{"x": 0, "y": 0, "w": 2, "h": 1}]},
+                {"id": "icon", "dst": [{"x": 0, "y": 0, "w": 2, "h": 1}]}
+            ]
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let decoded = decode_beatoraja_skin_request(BeatorajaSkinDecodeRequest {
+        pinned_sources: None,
+        skin_path: &entry,
+        kind: SkinKind::Play,
+        options: &BTreeMap::new(),
+        files: &BTreeMap::new(),
+        runtime_state: &LuaLoadRuntimeState::default(),
+        document_cache: None,
+        source_cache: None,
+        texture_cache: None,
+        font_cache: None,
+        installed_fonts: None,
+        library_roots: &[root.to_path_buf()],
+    })
+    .unwrap();
+
+    let alpha_of = |layer: &str| -> Vec<[u8; 4]> {
+        let source_id = decoded
+            .document
+            .pmchara
+            .iter()
+            .find(|pm| pm.id == layer)
+            .and_then(|pm| pm.runtime.as_ref())
+            .map(|runtime| runtime.motions[0].source_id.clone())
+            .unwrap();
+        let source = decoded.sources.iter().find(|source| source.source_id == source_id).unwrap();
+        source
+            .asset
+            .as_ref()
+            .unwrap()
+            .pixels
+            .chunks_exact(4)
+            .map(|pixel| [pixel[0], pixel[1], pixel[2], pixel[3]])
+            .collect()
+    };
+    assert_eq!(alpha_of("body"), vec![[200, 10, 10, 255], [7, 8, 9, 0]]);
+    assert_eq!(alpha_of("icon"), vec![[200, 10, 10, 255], [7, 8, 9, 255]]);
+}

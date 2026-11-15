@@ -198,6 +198,7 @@ use bmz_render::skin::{
 };
 
 mod app_support;
+mod arena_flow;
 mod background_jobs;
 mod bga_runtime;
 mod chart_assets;
@@ -237,6 +238,8 @@ mod play_flow_launch_poll;
 mod play_flow_launch_preload;
 #[path = "app/play_flow/launch/start.rs"]
 mod play_flow_launch_start;
+#[path = "app/play_flow/one_bass.rs"]
+mod play_flow_one_bass;
 #[path = "app/play_flow/practice.rs"]
 mod play_flow_practice;
 #[path = "app/play_flow/replay.rs"]

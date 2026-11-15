@@ -18,6 +18,7 @@ mod builder_assets;
 mod builder_core;
 mod builder_destination;
 mod builder_play;
+mod builder_pm_chara;
 mod builder_result;
 mod builder_select;
 mod helpers;
@@ -201,6 +202,7 @@ struct CsvBuilder<'a> {
     note: NoteState,
     judges: Vec<JudgeState>,
     bga: Option<JsonValue>,
+    pm_charas: Vec<JsonValue>,
     destinations: Vec<JsonValue>,
     current: Option<CurrentObject>,
     current_kind: String,

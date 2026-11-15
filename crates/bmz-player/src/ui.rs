@@ -73,6 +73,8 @@ macro_rules! tr {
     }};
 }
 
+#[path = "ui/auxiliary_panels/arena.rs"]
+mod auxiliary_arena;
 #[path = "ui/auxiliary_panels/course.rs"]
 mod auxiliary_course;
 #[path = "ui/auxiliary_panels/debug.rs"]
@@ -94,6 +96,7 @@ mod settings_navigation;
 mod settings_panel;
 mod skin_panel;
 
+use auxiliary_arena::*;
 use auxiliary_course::*;
 use auxiliary_debug::*;
 use auxiliary_notice::*;

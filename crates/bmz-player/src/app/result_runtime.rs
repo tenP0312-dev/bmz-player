@@ -57,6 +57,7 @@ pub(super) fn course_result_summary_for_skin(course: &CourseResultSummary) -> Re
         chart_md5: last.and_then(|summary| summary.chart_md5),
         chart_sha256: last.and_then(|summary| summary.chart_sha256),
         last_played_at: course.course_played_at.filter(|date| *date > 0),
+        fail_measure: None,
         skin_attempt: bmz_render::snapshot::SkinAttemptState {
             // Per-chart best options do not describe an aggregate course best.
             best_score_options: None,
@@ -303,6 +304,7 @@ pub(super) fn debug_boot_finished_play_session() -> FinishedPlaySession {
         double_option: crate::select_options::DoubleOptionScoreBucket::Off,
         rule_mode: bmz_gameplay::rule::RuleMode::Beatoraja,
         assist: Default::default(),
+        floating_hispeed_used: false,
         score_data_changed: false,
     }
 }
@@ -337,6 +339,7 @@ pub(super) fn debug_boot_result_summary() -> ResultSummary {
         chart_md5: None,
         chart_sha256: None,
         last_played_at: None,
+        fail_measure: None,
         skin_attempt: bmz_render::snapshot::SkinAttemptState {
             source_key_mode: Some(KeyMode::K7),
             effective_key_mode: Some(KeyMode::K7),

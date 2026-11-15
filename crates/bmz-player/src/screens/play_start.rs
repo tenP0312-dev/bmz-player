@@ -179,6 +179,9 @@ pub struct PlayStartOptions {
     pub rival_name: Option<String>,
     pub arrange_seed: Option<i64>,
     pub arrange_seed_2p: Option<i64>,
+    /// The seeds above were copied from another play (rival score or battle target)
+    /// instead of drawn fresh for this play. One-bass then adjusts the copied layout.
+    pub arrange_seed_borrowed: bool,
     /// Fresh play 用 Random Trainer seed。7K の通常 RANDOM かつ記録済み pattern が
     /// 無い場合だけ `PlaySessionOptions` 側で 1P seed より優先する。
     pub random_trainer_seed: Option<i64>,
@@ -295,6 +298,7 @@ pub fn play_session_options_from_start(
 
     PlaySessionOptions {
         read_archive_assets: start_options.read_archive_assets,
+        ready_first_notes: false,
         play_config_key_mode: None,
         session_mode: start_options.session_mode,
         autoplay: start_options.autoplay,
@@ -414,6 +418,7 @@ pub fn start_running_play_session_for_chart_with_audio_runtime_and_input_backend
     let mut session_options = play_session_options_from_start(app_config, start_options);
     session_options.sample_rate = runtime.sample_rate();
     session_options.ln_policy_setting = profile.play.ln_mode_policy;
+    session_options.ready_first_notes = profile.play.ready_first_notes;
     let prepared = load_prepared_play_session_for_chart_with_input_backend(
         library_db,
         chart_id,
@@ -446,6 +451,7 @@ pub fn prepare_play_session_for_chart_with_winit_input(
     let input = SharedInputBackend::default();
     let mut session_options = play_session_options_from_start(app_config, start_options);
     session_options.ln_policy_setting = profile.play.ln_mode_policy;
+    session_options.ready_first_notes = profile.play.ready_first_notes;
     let prepared = load_prepared_play_session_for_chart_with_input_backend(
         library_db,
         chart_id,

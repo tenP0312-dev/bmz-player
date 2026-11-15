@@ -218,6 +218,7 @@ fn session_with_autoplay(chart: PlayableChart) -> GameSession {
         },
         hispeed: 2.0,
         hispeed_mode: HispeedMode::Classic,
+        floating_hispeed_used: false,
         base_hispeed_mode: HispeedMode::Classic,
         floating_policy: FloatingPolicy::Toggle,
         normal_hispeed_level: 18,
@@ -353,6 +354,8 @@ mod cases_03;
 mod cases_04;
 #[path = "tests/chart_miss_text.rs"]
 mod chart_miss_text;
+#[path = "tests/floating_hispeed_mark.rs"]
+mod floating_hispeed_mark;
 #[path = "tests/judgement_display_time.rs"]
 mod judgement_display_time;
 #[path = "tests/optional_play_behaviors.rs"]

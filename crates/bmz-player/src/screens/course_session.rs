@@ -74,6 +74,8 @@ pub struct CourseResultSummary {
     /// Per-entry applied arrange (seed/pattern) of this attempt, in play order.
     /// Used to retry the whole course with the same arrangement.
     pub entry_arranges: Vec<AppliedArrange>,
+    /// Any stage was played with Floating HS (IR display mark).
+    pub floating_hispeed_used: bool,
     pub total_ex_score: u32,
     pub max_ex_score: u32,
     pub total_notes: u32,
@@ -258,6 +260,8 @@ impl ActiveCourseSession {
 
         let entry_arranges: Vec<AppliedArrange> =
             self.entry_results.iter().map(|r| r.finished.applied_arrange.clone()).collect();
+        let floating_hispeed_used =
+            self.entry_results.iter().any(|r| r.finished.floating_hispeed_used);
         let course_titles =
             course_titles_from_results(&self.definition.entries, &self.entry_results);
         let stage_charts = stage_charts_from_results(&self.stage_charts, &self.entry_results);
@@ -275,6 +279,7 @@ impl ActiveCourseSession {
             stage_charts,
             entry_summaries,
             entry_arranges,
+            floating_hispeed_used,
             total_ex_score,
             max_ex_score,
             total_notes,
@@ -493,6 +498,7 @@ mod tests {
                         double_option: crate::select_options::DoubleOptionScoreBucket::Off,
                         rule_mode: bmz_gameplay::rule::RuleMode::Beatoraja,
                         assist: Default::default(),
+                        floating_hispeed_used: false,
                         score_data_changed: false,
                     },
                 }
@@ -552,6 +558,17 @@ mod tests {
         assert_eq!(result.bp, 0);
         assert_eq!(result.ln_policy, LnScorePolicy::ForceCn);
         assert_eq!(result.course_ln_mode, Some(bmz_chart::model::LongNoteMode::Ln));
+    }
+
+    #[test]
+    fn course_marks_floating_hispeed_when_any_stage_used_it() {
+        let stages = || vec![(make_score(100, 0), 100); 3];
+        let none = make_session(1, stages()).into_result();
+        assert!(!none.floating_hispeed_used);
+
+        let mut session = make_session(1, stages());
+        session.entry_results[1].finished.floating_hispeed_used = true;
+        assert!(session.into_result().floating_hispeed_used);
     }
 
     #[test]
@@ -691,6 +708,7 @@ mod tests {
                         double_option: crate::select_options::DoubleOptionScoreBucket::Off,
                         rule_mode: bmz_gameplay::rule::RuleMode::Beatoraja,
                         assist: Default::default(),
+                        floating_hispeed_used: false,
                         score_data_changed: false,
                     },
                 }

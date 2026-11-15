@@ -166,6 +166,7 @@ pub fn build_course_submission(
     let mut play_options = json!({
         "device_type": context.device_type.as_str(),
         "option": arrange_option_ir_from_persistent(&context.arrange),
+        "floating_hispeed": result.floating_hispeed_used,
     });
     if let Some(seed) = context.random_seed {
         play_options["random_seed"] = json!(seed.to_string());
@@ -409,6 +410,7 @@ mod tests {
             stage_charts: Vec::new(),
             entry_summaries: Vec::new(),
             entry_arranges: Vec::new(),
+            floating_hispeed_used: true,
             total_ex_score: 0,
             max_ex_score: 0,
             total_notes: 0,
@@ -451,6 +453,7 @@ mod tests {
         assert_eq!(payload["rule"]["rule_mode"], "Dx");
         assert_eq!(payload["result"]["max_combo"], json!(123));
         assert_eq!(payload["result"]["clear"], json!("NoPlay"));
+        assert_eq!(payload["play_options"]["floating_hispeed"], json!(true));
     }
 
     #[test]
@@ -473,6 +476,7 @@ mod tests {
             stage_charts: Vec::new(),
             entry_summaries: vec![stage_summary(ClearType::NoPlay, 0.0)],
             entry_arranges: Vec::new(),
+            floating_hispeed_used: false,
             total_ex_score: 1234,
             max_ex_score: 2000,
             total_notes: 1000,
@@ -514,6 +518,7 @@ mod tests {
         assert_eq!(payload["result"]["gauge_value"], json!(66));
         assert_eq!(payload["result"]["entries"][0]["clear"], json!("NoPlay"));
         assert_eq!(payload["rule"]["effective_ln_mode"], 0);
+        assert_eq!(payload["play_options"]["floating_hispeed"], json!(false));
     }
 
     #[test]
@@ -539,6 +544,7 @@ mod tests {
                 stage_summary(ClearType::FullCombo, 100.0),
             ],
             entry_arranges: Vec::new(),
+            floating_hispeed_used: false,
             total_ex_score: 1234,
             max_ex_score: 2000,
             total_notes: 1000,
@@ -602,6 +608,7 @@ mod tests {
             stage_charts: Vec::new(),
             entry_summaries: vec![stage_summary(ClearType::NoPlay, 0.0)],
             entry_arranges: Vec::new(),
+            floating_hispeed_used: false,
             total_ex_score: 1234,
             max_ex_score: 2000,
             total_notes: 1000,
@@ -663,6 +670,7 @@ mod tests {
             stage_charts: Vec::new(),
             entry_summaries: vec![stage_summary(ClearType::NoPlay, 0.0)],
             entry_arranges: Vec::new(),
+            floating_hispeed_used: false,
             total_ex_score: 1234,
             max_ex_score: 2000,
             total_notes: 1000,

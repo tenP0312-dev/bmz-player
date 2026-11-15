@@ -49,6 +49,8 @@ pub struct FinishedPlaySession {
     pub double_option: crate::select_options::DoubleOptionScoreBucket,
     pub rule_mode: bmz_gameplay::rule::RuleMode,
     pub assist: AssistRuntime,
+    /// このプレイで Floating HS を使った（IR の表示用の印。DB には保存しない）。
+    pub floating_hispeed_used: bool,
     /// score_best、履歴、またはclear-only集計のいずれかを永続化した。
     pub score_data_changed: bool,
 }
@@ -257,6 +259,8 @@ pub struct FinishSessionSnapshot {
     failed_gauge: Option<GaugeState>,
     /// プレイヤーの操作で曲の途中に止めたか。IR の `complete_song` 判定に使う。
     manually_stopped: bool,
+    /// The session was Playing with Floating HS at least once (IR display mark).
+    floating_hispeed_used: bool,
     assist: AssistRuntime,
     battle_opponent: Option<bmz_render::snapshot::OpponentRenderSnapshot>,
 }
@@ -356,6 +360,7 @@ impl FinishSessionSnapshot {
             result_judgements: session.result_judgements.clone(),
             failed_gauge: (session.state == PlayState::Failed).then(|| session.gauge.clone()),
             manually_stopped: session.manually_stopped,
+            floating_hispeed_used: session.floating_hispeed_used,
             assist: session.assist,
             battle_opponent: crate::screens::play_snapshot::final_opponent_render_snapshot(session),
         }
@@ -602,6 +607,7 @@ fn finish_session_snapshot_result(
         double_option: score_key.double_option,
         rule_mode: score_key.rule_mode,
         assist: snapshot.assist,
+        floating_hispeed_used: snapshot.floating_hispeed_used,
         score_data_changed,
     })
 }
@@ -732,6 +738,7 @@ fn enqueue_ir_jobs(
             bms_switch_choices: applied_arrange.bms_switch_choices.clone(),
             rule_mode: snapshot.rule_mode.as_str().to_string(),
             course_stage: finish_mode == FinishResultMode::CourseStage,
+            floating_hispeed_used: snapshot.floating_hispeed_used,
             // 保存時に serialize 済みバイト列から計算した hash。プレイ終了
             // 直後のフレームでリプレイファイルを読み直さない。
             replay_hash: stored.replay_sha256.clone(),

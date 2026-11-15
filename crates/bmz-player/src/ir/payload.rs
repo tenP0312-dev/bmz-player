@@ -49,6 +49,8 @@ pub struct IrSubmissionContext {
     pub rule_mode: String,
     /// コース/Dan進行中の単曲結果。IRごとの互換lamp制約に使う。
     pub course_stage: bool,
+    /// Floating HS was active while Playing at least once. Display-only mark.
+    pub floating_hispeed_used: bool,
     /// 保存済みリプレイファイルの SHA256 (hex)。リプレイが無ければ None。
     pub replay_hash: Option<String>,
 }
@@ -112,6 +114,10 @@ pub fn build_score_submission(
     if context.course_stage {
         play_options.insert("course_stage".to_string(), serde_json::Value::Bool(true));
     }
+    play_options.insert(
+        "floating_hispeed".to_string(),
+        serde_json::Value::Bool(context.floating_hispeed_used),
+    );
     let ghost =
         encode_beatoraja_ghost(&result.score.ghost).ok().filter(|encoded| !encoded.is_empty());
 
@@ -381,6 +387,7 @@ mod tests {
             gauge_option: "normal".to_string(),
             device_type: InputDeviceKind::Controller,
             idempotency_key: "score_local_1".to_string(),
+            floating_hispeed_used: true,
             arrange: ArrangeOption::Random,
             arrange_2p: ArrangeOption::Mirror,
             double_option: DoubleOptionScoreBucket::Battle,
@@ -395,6 +402,13 @@ mod tests {
             replay_hash: Some("ab".repeat(32)),
         };
         let payload = build_score_submission(&chart, &result, context.clone());
+        assert_eq!(payload.play_options["floating_hispeed"], serde_json::json!(true));
+        let unused = build_score_submission(
+            &chart,
+            &result,
+            IrSubmissionContext { floating_hispeed_used: false, ..context.clone() },
+        );
+        assert_eq!(unused.play_options["floating_hispeed"], serde_json::json!(false));
         for (profile, setting, force, mode) in [
             (
                 ChartLnProfile {

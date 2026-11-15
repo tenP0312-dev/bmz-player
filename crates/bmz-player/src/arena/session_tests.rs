@@ -322,8 +322,9 @@ fn arena_status_player_is_kept_until_the_connection_drops() {
     use crate::arena::protocol::PlayerStatus;
     let mut session = connected(ScreenState::Select);
     assert_eq!(session.panel().player, None);
-    let player = PlayerStatus { rating: Some(1500), matches_played: Some(12) };
-    session.handle(at(1.0), Event::Message(ServerMessage::ArenaStatus(player)));
+    let player =
+        PlayerStatus { rating: Some(1500), matches_played: Some(12), ..PlayerStatus::default() };
+    session.handle(at(1.0), Event::Message(ServerMessage::ArenaStatus(player.clone())));
     assert_eq!(session.panel().player, Some(player));
     session.handle(at(2.0), Event::SocketClosed);
     assert_eq!(session.panel().player, None);

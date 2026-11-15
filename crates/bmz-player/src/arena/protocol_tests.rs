@@ -154,13 +154,20 @@ fn arena_status_reads_rating_and_matches_played_and_ignores_the_rest() {
         "waiting_players":[],"ranking":[],"public_rooms":[],"lobby_chat":[]}"#;
     assert_eq!(
         parse_server_message(text).unwrap(),
-        ServerMessage::ArenaStatus(PlayerStatus { rating: Some(1523), matches_played: Some(42) })
+        ServerMessage::ArenaStatus(PlayerStatus {
+            rating: Some(1523),
+            matches_played: Some(42),
+            ..PlayerStatus::default()
+        })
     );
     // Mistyped or missing fields are ignored individually.
     let text = r#"{"type":"arena_status","player":{"rating":"high","matches_played":7}}"#;
     assert_eq!(
         parse_server_message(text).unwrap(),
-        ServerMessage::ArenaStatus(PlayerStatus { rating: None, matches_played: Some(7) })
+        ServerMessage::ArenaStatus(PlayerStatus {
+            matches_played: Some(7),
+            ..PlayerStatus::default()
+        })
     );
     let text = r#"{"type":"arena_status","player":null}"#;
     assert_eq!(
@@ -172,8 +179,8 @@ fn arena_status_reads_rating_and_matches_played_and_ignores_the_rest() {
 #[test]
 fn unknown_types_and_fields_do_not_fail() {
     assert_eq!(
-        parse_server_message(r#"{"type":"live","deadline":1}"#).unwrap(),
-        ServerMessage::Unknown("live".into())
+        parse_server_message(r#"{"type":"chat_history","deadline":1}"#).unwrap(),
+        ServerMessage::Unknown("chat_history".into())
     );
     assert_eq!(parse_server_message("{}").unwrap(), ServerMessage::Unknown(String::new()));
     // Unknown extra fields on a known type are ignored.
@@ -433,4 +440,118 @@ fn queue_cancel_has_no_fields() {
     let value: Value =
         serde_json::from_str(&ClientMessage::QueueCancel {}.to_json().unwrap()).unwrap();
     assert_eq!(value, json!({"type":"queue_cancel"}));
+}
+
+#[test]
+fn live_and_final_are_written_with_the_servers_field_names() {
+    use super::{FinalReport, FinalState, LiveReport};
+    let live = LiveReport {
+        match_id: "m1".into(),
+        seq: 3,
+        exscore: 10,
+        processed_notes: 6,
+        minbp: 2,
+        combo_break: 1,
+        max_combo: 5,
+        play_option: 102,
+        play_mode: 7,
+        ln_mode: "LN".into(),
+    };
+    let value: serde_json::Value =
+        serde_json::from_str(&ClientMessage::Live(live.clone()).to_json().unwrap()).unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!({"type":"live","match_id":"m1","seq":3,"exscore":10,
+            "processed_notes":6,"minbp":2,"combo_break":1,"max_combo":5,
+            "play_option":102,"play_mode":7,"ln_mode":"LN"})
+    );
+    let report = FinalReport { live, state: FinalState::HardFail, clear_type: 1 };
+    let value: serde_json::Value =
+        serde_json::from_str(&ClientMessage::Final(report).to_json().unwrap()).unwrap();
+    assert_eq!(value["type"], "final");
+    assert_eq!(value["state"], "hard_fail");
+    assert_eq!(value["clear_type"], 1);
+    assert_eq!(value["seq"], 3);
+}
+
+#[test]
+fn result_and_the_servers_live_snapshot_are_read() {
+    let text = r#"{"type":"result","match_id":"m1","rated":false,
+        "room_retained_player_ids":[7],"future":1,
+        "players":[{"placement":1,"player_id":7,"name":"a","exscore":180,"processed_notes":100,
+                    "final_state":"complete","clear_type":6,"clear_label":"HARD","delta":null},
+                   {"placement":2,"player_id":8,"name":"b","exscore":0,"final_state":"forfeit",
+                    "clear_label":"DNF"},
+                   "junk"]}"#;
+    let ServerMessage::Result(result) = parse_server_message(text).unwrap() else {
+        panic!("not a result");
+    };
+    assert_eq!(result.match_id, "m1");
+    assert_eq!(result.room_retained_player_ids, vec![7]);
+    assert_eq!(result.players.len(), 2);
+    assert_eq!(result.players[0].clear_type, Some(6));
+    assert_eq!(result.players[0].placement, Some(1));
+    assert_eq!(result.players[1].clear_label, "DNF");
+    assert_eq!(result.players[1].clear_type, None);
+
+    let text = r#"{"type":"live","match_id":"m1","state":"playing","players":[
+        {"player_id":7,"name":"a","connected":true,"exscore":30,"processed_notes":20,
+         "minbp":1,"max_combo":15,"finished":false},
+        {"player_id":8,"name":"b","connected":false,"exscore":-5}]}"#;
+    let ServerMessage::LiveSnapshot(snapshot) = parse_server_message(text).unwrap() else {
+        panic!("not a live snapshot");
+    };
+    assert_eq!(snapshot.state, "playing");
+    assert_eq!(snapshot.players[0].exscore, 30);
+    assert!(!snapshot.players[1].connected);
+    // A mistyped (negative) count is 0, not a failure.
+    assert_eq!(snapshot.players[1].exscore, 0);
+}
+
+#[test]
+fn forfeit_resume_and_room_closing_messages_are_read() {
+    assert_eq!(
+        parse_server_message(
+            r#"{"type":"forfeit_accepted","match_id":"m1","reason":"play_aborted"}"#
+        )
+        .unwrap(),
+        ServerMessage::ForfeitAccepted { match_id: "m1".into(), reason: "play_aborted".into() }
+    );
+    assert_eq!(
+        parse_server_message(
+            r#"{"type":"match_resume","match_id":"m1","state":"countdown","start_at":1010.5}"#
+        )
+        .unwrap(),
+        ServerMessage::MatchResume {
+            match_id: "m1".into(),
+            state: "countdown".into(),
+            start_at: Some(1010.5)
+        }
+    );
+    assert_eq!(
+        parse_server_message(r#"{"type":"room_disbanded","reason":"private_room_disbanded"}"#)
+            .unwrap(),
+        ServerMessage::RoomDisbanded
+    );
+    assert_eq!(
+        parse_server_message(r#"{"type":"room_kicked","room_code":"ABC123"}"#).unwrap(),
+        ServerMessage::RoomKicked
+    );
+}
+
+#[test]
+fn arena_status_reads_the_room_the_server_holds() {
+    let text =
+        r#"{"type":"arena_status","player":{"queue":{"status":"room","room_code":" ab12cd "}}}"#;
+    let ServerMessage::ArenaStatus(status) = parse_server_message(text).unwrap() else {
+        panic!("not arena_status");
+    };
+    assert!(status.queue_known);
+    assert_eq!(status.queue_room_code.as_deref(), Some("ab12cd"));
+    let text = r#"{"type":"arena_status","player":{"queue":{"status":"idle","room_code":""}}}"#;
+    let ServerMessage::ArenaStatus(status) = parse_server_message(text).unwrap() else {
+        panic!("not arena_status");
+    };
+    assert!(status.queue_known);
+    assert_eq!(status.queue_room_code, None);
 }

@@ -61,6 +61,9 @@ impl WinitApp {
         arrange_overrides: Vec<AppliedArrange>,
         auto_advance_intermediate_results: bool,
     ) {
+        if self.arena_blocks_normal_start() {
+            return;
+        }
         if let Err(error) = self.try_start_course_with_arrange(
             course_id,
             arrange_overrides,
@@ -211,6 +214,9 @@ impl WinitApp {
         course_score_id: i64,
         auto_advance_intermediate_results: bool,
     ) {
+        if self.arena_blocks_normal_start() {
+            return;
+        }
         let started_at = Instant::now();
         let course_load_started_at = Instant::now();
         match self.boot.library_db.repair_course_entry_chart_links_for_course(course_id) {

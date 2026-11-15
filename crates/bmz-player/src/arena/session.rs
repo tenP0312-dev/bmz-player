@@ -9,9 +9,10 @@ use std::collections::VecDeque;
 use std::time::Duration;
 
 use super::protocol::{
-    ChartAnnounced, ChartCheck, ClientMessage, Hello, NominationInfo, NominationsRevealed,
-    OptionReady, OptionSelect, PlayReady, PlayerStatus, Prepare, RoomEntry, RoomPlayer, RoomRules,
-    RoomSettings, RoomStatusInfo, ScreenState, ServerMessage,
+    ArenaResult, ChartAnnounced, ChartCheck, ClientMessage, FinalReport, FinalState, Hello,
+    LivePlayer, LiveReport, NominationInfo, NominationsRevealed, OptionReady, OptionSelect,
+    PlayReady, PlayerStatus, Prepare, RoomEntry, RoomPlayer, RoomRules, RoomSettings,
+    RoomStatusInfo, ScreenState, ServerMessage,
 };
 
 /// `ping` every 5 seconds.
@@ -131,6 +132,65 @@ pub enum MatchStage {
     Loading,
     /// `start` arrived: the song begins at the server time `start_at`.
     Countdown,
+    /// The song is being played; `live` goes out every second.
+    Playing,
+    /// The song ended and `final` was produced; waiting for `result`.
+    Finished,
+}
+
+impl MatchStage {
+    /// The chart is loaded or being played: a replay of the earlier messages
+    /// after a reconnect must not restart anything.
+    fn is_started(self) -> bool {
+        matches!(self, Self::Loading | Self::Countdown | Self::Playing | Self::Finished)
+    }
+}
+
+/// The score values of a play, as `live` and `final` carry them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PlayValues {
+    pub exscore: u32,
+    /// Judged notes (never above the song's note count).
+    pub processed_notes: u32,
+    /// BAD + POOR + empty POOR.
+    pub minbp: u32,
+    /// BAD + POOR.
+    pub combo_break: u32,
+    pub max_combo: u32,
+}
+
+impl PlayValues {
+    /// Keeps what the server checks: nothing falls, nothing passes the note
+    /// count, EX is at most 2 per processed note and grows by at most 2 per new
+    /// note. The play is the truth; this only protects against a sampling quirk
+    /// that would make the server drop the report.
+    fn clamped(self, previous: Self, total_notes: u32) -> Self {
+        let processed_notes = self.processed_notes.max(previous.processed_notes).min(total_notes);
+        let new_notes = processed_notes.saturating_sub(previous.processed_notes);
+        let exscore = self
+            .exscore
+            .max(previous.exscore)
+            .min(processed_notes.saturating_mul(2))
+            .min(previous.exscore.saturating_add(new_notes.saturating_mul(2)));
+        Self {
+            exscore,
+            processed_notes,
+            minbp: self.minbp.max(previous.minbp),
+            combo_break: self.combo_break.max(previous.combo_break),
+            max_combo: self.max_combo.max(previous.max_combo).min(processed_notes),
+        }
+    }
+}
+
+/// `final.state` and `final.clear_type` for a finished play. A failed play, or
+/// one that ended with a FAILED clear (gauge below the border), is `hard_fail`
+/// with clear 1; the server rejects any other combination.
+pub fn final_state_for(failed: bool, clear_type: u8) -> (FinalState, u8) {
+    if failed || clear_type <= 1 {
+        (FinalState::HardFail, 1)
+    } else {
+        (FinalState::Complete, clear_type.min(10))
+    }
 }
 
 /// The option phase (`option_select`).
@@ -152,6 +212,9 @@ pub struct StartGate {
     pub match_id: String,
     pub start_at: f64,
 }
+
+/// `live` at most once a second (the server drops any closer than 0.2 s).
+pub const LIVE_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Auto-send of `option_ready` this long before the deadline (spec 3.4 step 8).
 const OPTION_AUTO_SEND_LEAD: f64 = 0.25;
@@ -183,6 +246,19 @@ pub struct MatchView {
     /// This player's `play_ready` was sent.
     pub play_ready_sent: bool,
     pub start_at: Option<f64>,
+    /// The song's note count as `play_ready` reported it.
+    pub total_notes: Option<u32>,
+    /// The audio clock started: `live` may be sent.
+    pub play_started: bool,
+    /// Sequence number of the last `live` / `final` (shared).
+    pub live_seq: u32,
+    /// The values the last `live` / `final` carried.
+    pub last_values: PlayValues,
+    /// `final` not yet answered by `result`. It is sent again after a reconnect.
+    pub pending_final: Option<FinalReport>,
+    /// Everyone's progress from the server's `live`.
+    pub live_players: Vec<LivePlayer>,
+    last_live_at: Option<Duration>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -210,6 +286,12 @@ pub struct ChartCheckRequest {
 pub enum MatchEnd {
     Cancelled(String),
     Released,
+    /// The server accepted this player's forfeit (`reason`).
+    Forfeited(String),
+    /// The host disbanded the room.
+    RoomDisbanded,
+    /// The host removed this player.
+    RoomKicked,
 }
 
 /// Everything the panel needs, copied out after each step.
@@ -234,6 +316,8 @@ pub struct ArenaPanelState {
     pub pending_prepare: Option<Prepare>,
     pub start_gate: Option<StartGate>,
     pub match_end: Option<MatchEnd>,
+    /// The last finished match's result, kept until the next match.
+    pub result: Option<ArenaResult>,
     /// MD5 (lowercase hex) of the chart under the select cursor, if any.
     pub selected_chart_md5: Option<String>,
     pub last_disconnect: Option<DisconnectReason>,
@@ -293,6 +377,28 @@ pub enum Event {
     LoadFailed {
         match_id: String,
     },
+    /// The audio clock of the match song started.
+    PlayStarted {
+        match_id: String,
+    },
+    /// The play's current values (the app gives them every frame).
+    LiveSample {
+        match_id: String,
+        values: PlayValues,
+    },
+    /// The song ended.
+    PlayFinished {
+        match_id: String,
+        values: PlayValues,
+        /// The play ended in the FAILED state.
+        failed: bool,
+        /// The play's clear type (0..=10).
+        clear_type: u8,
+    },
+    /// The player gives up the match (also sent when the app closes).
+    Withdraw,
+    /// The result screen's normal IR submission is finished (spec 3.3 `ready`).
+    SetResultSettled(bool),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -337,6 +443,8 @@ pub struct ArenaSession {
     option_choice: Option<u32>,
     option_sent: bool,
     match_end: Option<MatchEnd>,
+    result: Option<ArenaResult>,
+    result_settled: bool,
     selected_chart_md5: Option<String>,
     last_disconnect: Option<DisconnectReason>,
     disconnected_since: Option<Duration>,
@@ -372,6 +480,8 @@ impl ArenaSession {
             option_choice: None,
             option_sent: false,
             match_end: None,
+            result: None,
+            result_settled: false,
             selected_chart_md5: None,
             last_disconnect: None,
             disconnected_since: None,
@@ -388,10 +498,18 @@ impl ArenaSession {
         self.unknown_messages
     }
 
-    /// `ready` is true only on the select screen, inside a room, once the player
-    /// pressed "ready" (spec 3.3). The result-screen case comes with B3.
+    /// `ready` is true only inside a room, once the player pressed "ready", and
+    /// only on the select screen or on the result screen after the normal IR
+    /// submission finished (spec 3.3). Practice, autoplay, replay, course and
+    /// play never say ready. (The server reads `ready` on `select` only; the
+    /// result-screen value is for the spec's contract.)
     fn desired_ready(&self) -> bool {
-        self.screen == ScreenState::Select && self.room.as_ref().is_some_and(|room| room.ready)
+        let screen_allows = match self.screen {
+            ScreenState::Select => true,
+            ScreenState::Result => self.result_settled,
+            _ => false,
+        };
+        screen_allows && self.room.as_ref().is_some_and(|room| room.ready)
     }
 
     fn forget_match(&mut self) {
@@ -433,7 +551,7 @@ impl ArenaSession {
             round_trip_secs: self.round_trip,
             active_match_id: self.active_match_id.clone(),
             notice: self.notice.clone(),
-            player: self.player,
+            player: self.player.clone(),
             room: self.room.clone(),
             current_match: self.current_match.clone(),
             pending_chart_check: self.pending_chart_check.clone(),
@@ -444,6 +562,7 @@ impl ArenaSession {
                     .map(|start_at| StartGate { match_id: current.match_id.clone(), start_at })
             }),
             match_end: self.match_end.clone(),
+            result: self.result.clone(),
             selected_chart_md5: self.selected_chart_md5.clone(),
             last_disconnect: self.last_disconnect,
             retry_at_unix: self.retry_at.map(|(_, unix)| unix),
@@ -465,8 +584,59 @@ impl ArenaSession {
             }
             Event::Tick => self.on_tick(now),
             Event::SetScreen(screen) => {
+                let mut actions = Vec::new();
+                // Back on the select screen in the middle of the song, without
+                // `final`: the server would end the match with `play_aborted`
+                // anyway. Say so first (this should not happen: ESC is locked).
+                if screen == ScreenState::Select
+                    && self.screen != ScreenState::Select
+                    && let Some(current) = self.current_match.as_ref()
+                    && matches!(current.stage, MatchStage::Countdown | MatchStage::Playing)
+                    && current.pending_final.is_none()
+                    && self.phase == Phase::Connected
+                {
+                    actions.push(Action::Send(ClientMessage::Forfeit {
+                        match_id: current.match_id.clone(),
+                    }));
+                }
                 self.screen = screen;
+                if screen != ScreenState::Result {
+                    self.result_settled = false;
+                }
+                actions.extend(self.state_message().into_iter().map(Action::Send));
+                actions
+            }
+            Event::SetResultSettled(settled) => {
+                self.result_settled = settled;
                 self.state_message().into_iter().map(Action::Send).collect()
+            }
+            Event::Withdraw => {
+                if self.phase != Phase::Connected {
+                    return Vec::new();
+                }
+                match self.current_match.as_ref() {
+                    // After `final` the play is done; the server settles it.
+                    Some(current) if current.pending_final.is_none() => {
+                        vec![Action::Send(ClientMessage::Forfeit {
+                            match_id: current.match_id.clone(),
+                        })]
+                    }
+                    _ => Vec::new(),
+                }
+            }
+            Event::PlayStarted { match_id } => {
+                if let Some(current) =
+                    self.current_match.as_mut().filter(|current| current.match_id == match_id)
+                    && matches!(current.stage, MatchStage::Loading | MatchStage::Countdown)
+                {
+                    current.stage = MatchStage::Playing;
+                    current.play_started = true;
+                }
+                Vec::new()
+            }
+            Event::LiveSample { match_id, values } => self.live_sample(now, &match_id, values),
+            Event::PlayFinished { match_id, values, failed, clear_type } => {
+                self.play_finished(&match_id, values, failed, clear_type)
             }
             Event::ManualReconnect => {
                 if matches!(self.phase, Phase::Refused(_) | Phase::Replaced) {
@@ -573,6 +743,7 @@ impl ArenaSession {
                     return Vec::new();
                 }
                 current.play_ready_sent = true;
+                current.total_notes = Some(totalnotes);
                 vec![Action::Send(ClientMessage::PlayReady(PlayReady {
                     match_id,
                     chart_hash: md5,
@@ -611,11 +782,108 @@ impl ArenaSession {
         }
     }
 
+    /// `live`: at most once a second, only while the song plays, never after `final`.
+    fn live_sample(&mut self, now: Now, match_id: &str, values: PlayValues) -> Vec<Action> {
+        if self.phase != Phase::Connected {
+            return Vec::new();
+        }
+        let Some(current) = self.current_match.as_mut() else {
+            return Vec::new();
+        };
+        let (Some(total), Some(prepare)) = (current.total_notes, current.prepare.as_ref()) else {
+            return Vec::new();
+        };
+        if current.match_id != match_id
+            || current.stage != MatchStage::Playing
+            || !current.play_started
+            || current.pending_final.is_some()
+            || current.last_live_at.is_some_and(|at| now.mono.saturating_sub(at) < LIVE_INTERVAL)
+        {
+            return Vec::new();
+        }
+        let values = values.clamped(current.last_values, total);
+        current.live_seq += 1;
+        current.last_live_at = Some(now.mono);
+        current.last_values = values;
+        vec![Action::Send(ClientMessage::Live(live_report(
+            current.match_id.clone(),
+            current.live_seq,
+            values,
+            prepare,
+        )))]
+    }
+
+    /// `final`: once, when the song ends. It is kept until `result` arrives so
+    /// that a lost connection can send it again.
+    fn play_finished(
+        &mut self,
+        match_id: &str,
+        values: PlayValues,
+        failed: bool,
+        clear_type: u8,
+    ) -> Vec<Action> {
+        let connected = self.phase == Phase::Connected;
+        let Some(current) = self.current_match.as_mut() else {
+            return Vec::new();
+        };
+        let (Some(total), Some(prepare)) = (current.total_notes, current.prepare.as_ref()) else {
+            return Vec::new();
+        };
+        if current.match_id != match_id
+            || !matches!(current.stage, MatchStage::Playing | MatchStage::Countdown)
+            || current.pending_final.is_some()
+        {
+            return Vec::new();
+        }
+        let (state, clear_type) = final_state_for(failed, clear_type);
+        let mut values = values.clamped(current.last_values, total);
+        if state == FinalState::Complete {
+            // A complete play processed every note (the server requires it).
+            values.processed_notes = total;
+        }
+        current.live_seq += 1;
+        current.last_values = values;
+        let report = FinalReport {
+            live: live_report(current.match_id.clone(), current.live_seq, values, prepare),
+            state,
+            clear_type,
+        };
+        current.pending_final = Some(report.clone());
+        current.stage = MatchStage::Finished;
+        if connected { vec![Action::Send(ClientMessage::Final(report))] } else { Vec::new() }
+    }
+
+    /// What a reconnect has to say again, before `state`: the `final` the server
+    /// may not have seen, and `play_ready` while the load is waiting for the start.
+    fn resend_after_reconnect(&self) -> Vec<Action> {
+        let Some(current) = self.current_match.as_ref() else {
+            return Vec::new();
+        };
+        let mut actions = Vec::new();
+        if let Some(report) = &current.pending_final {
+            actions.push(Action::Send(ClientMessage::Final(report.clone())));
+        }
+        if current.stage == MatchStage::Loading
+            && current.play_ready_sent
+            && let (Some(prepare), Some(totalnotes)) =
+                (current.prepare.as_ref(), current.total_notes)
+        {
+            actions.push(Action::Send(ClientMessage::PlayReady(PlayReady {
+                match_id: current.match_id.clone(),
+                chart_hash: prepare.md5.clone(),
+                ln_mode: prepare.ln_mode.clone(),
+                totalnotes,
+            })));
+        }
+        actions
+    }
+
     fn enter_room(&mut self, entry: RoomEntry) -> Vec<Action> {
         if self.phase != Phase::Connected || self.current_match.is_some() {
             return Vec::new();
         }
         self.match_end = None;
+        self.result = None;
         self.room = Some(RoomView::default());
         vec![Action::Send(ClientMessage::RoomEntry(entry))]
     }
@@ -696,6 +964,25 @@ impl ArenaSession {
         }))
     }
 
+    /// The server's own record of the room (`arena_status.player.queue`) is the
+    /// truth after a reconnect: the room is back with its code (the member list
+    /// follows with the next `room_status`), or it is gone.
+    fn follow_server_room(&mut self, player: &PlayerStatus) {
+        if !player.queue_known {
+            return;
+        }
+        match (&player.queue_room_code, self.room.as_mut()) {
+            (Some(code), Some(room)) => room.code = Some(code.clone()),
+            (Some(code), None) => {
+                self.room = Some(RoomView { code: Some(code.clone()), ..RoomView::default() });
+            }
+            (None, Some(room)) if room.code.is_some() && self.current_match.is_none() => {
+                self.room = None;
+            }
+            (None, _) => {}
+        }
+    }
+
     fn apply_room_status(&mut self, status: RoomStatusInfo) {
         let room = self.room.get_or_insert_with(RoomView::default);
         if status.room_code.is_some() {
@@ -723,16 +1010,20 @@ impl ArenaSession {
                 self.notice = None;
                 self.session_id = Some(ok.session_id).filter(|id| !id.is_empty());
                 self.active_match_id = Some(ok.active_match_id).filter(|id| !id.is_empty());
-                if self.active_match_id.is_none() {
-                    // The server has no match for us: drop the local one (spec 3.6).
+                // The server has no match for us, or another one: drop the local
+                // one (spec 3.6). A match kept across the reconnect stays.
+                if self.current_match.as_ref().map(|current| &current.match_id)
+                    != self.active_match_id.as_ref()
+                {
                     self.forget_match();
                 }
                 if let Some(server_time) = ok.server_time {
                     // A first estimate; the first pong refines it with the round trip.
                     self.clock_offset = Some(server_time - now.unix);
                 }
-                let mut actions: Vec<Action> =
-                    self.state_message().into_iter().map(Action::Send).collect();
+                // Spec 3.6: `final` first, then `play_ready`, then `state`.
+                let mut actions = self.resend_after_reconnect();
+                actions.extend(self.state_message().into_iter().map(Action::Send));
                 actions.push(self.ping(now));
                 actions
             }
@@ -759,6 +1050,7 @@ impl ArenaSession {
                 vec![Action::Close]
             }
             ServerMessage::ArenaStatus(player) => {
+                self.follow_server_room(&player);
                 self.player = Some(player);
                 Vec::new()
             }
@@ -767,7 +1059,15 @@ impl ArenaSession {
                 Vec::new()
             }
             ServerMessage::MatchReserved(reserved) => {
+                // After a reconnect the server repeats `match_reserved` of the match
+                // that is already loaded or playing here: keep it as it is.
+                if self.current_match.as_ref().is_some_and(|current| {
+                    current.match_id == reserved.match_id && current.stage.is_started()
+                }) {
+                    return Vec::new();
+                }
                 self.match_end = None;
+                self.result = None;
                 self.pending_chart_check = None;
                 self.current_match = Some(MatchView {
                     match_id: reserved.match_id,
@@ -787,6 +1087,13 @@ impl ArenaSession {
                     prepare: None,
                     play_ready_sent: false,
                     start_at: None,
+                    total_notes: None,
+                    play_started: false,
+                    live_seq: 0,
+                    last_values: PlayValues::default(),
+                    pending_final: None,
+                    live_players: Vec::new(),
+                    last_live_at: None,
                 });
                 // The match fixes the "state" the server expects (spec 3.4 step 2).
                 self.sent_state = None;
@@ -844,6 +1151,12 @@ impl ArenaSession {
                 if chart.match_id.as_deref().is_some_and(|id| id != current.match_id) {
                     return Vec::new();
                 }
+                // The same chart repeated after a reconnect: already loaded or playing.
+                if current.stage.is_started()
+                    && current.chart.as_ref().is_some_and(|known| known.md5 == chart.md5)
+                {
+                    return Vec::new();
+                }
                 current.stage = MatchStage::ChartChosen;
                 current.option = None;
                 current.prepare = None;
@@ -863,7 +1176,7 @@ impl ArenaSession {
                     return Vec::new();
                 };
                 // Late copies (after `prepare`) are ignored.
-                if matches!(current.stage, MatchStage::Loading | MatchStage::Countdown) {
+                if current.stage.is_started() {
                     return Vec::new();
                 }
                 current.stage = MatchStage::Options;
@@ -875,7 +1188,12 @@ impl ArenaSession {
                 let Some(current) = self.current_match_for(&prepare.match_id) else {
                     return Vec::new();
                 };
-                if current.stage == MatchStage::Countdown {
+                // A repeated `prepare` (after a reconnect) must not start the song again.
+                if matches!(
+                    current.stage,
+                    MatchStage::Countdown | MatchStage::Playing | MatchStage::Finished
+                ) || (current.stage == MatchStage::Loading && current.prepare.is_some())
+                {
                     return Vec::new();
                 }
                 current.stage = MatchStage::Loading;
@@ -889,8 +1207,64 @@ impl ArenaSession {
                 let Some(current) = self.current_match_for(&start.match_id) else {
                     return Vec::new();
                 };
+                if matches!(current.stage, MatchStage::Playing | MatchStage::Finished) {
+                    return Vec::new();
+                }
                 current.stage = MatchStage::Countdown;
                 current.start_at = start.start_at;
+                Vec::new()
+            }
+            ServerMessage::MatchResume { match_id, state, start_at } => {
+                // Only a match this client still holds can be resumed; after a
+                // restart of BMZ the song cannot be rejoined (it is forfeited by the server).
+                let Some(current) = self.current_match_for(&match_id) else {
+                    return Vec::new();
+                };
+                if state == "countdown"
+                    && matches!(current.stage, MatchStage::Loading | MatchStage::Countdown)
+                {
+                    current.stage = MatchStage::Countdown;
+                    current.start_at = start_at.or(current.start_at);
+                }
+                Vec::new()
+            }
+            ServerMessage::LiveSnapshot(snapshot) => {
+                if let Some(current) = self.current_match_for(&snapshot.match_id) {
+                    current.live_players = snapshot.players;
+                }
+                Vec::new()
+            }
+            ServerMessage::Result(result) => {
+                if self
+                    .current_match
+                    .as_ref()
+                    .is_some_and(|current| current.match_id != result.match_id)
+                {
+                    return Vec::new();
+                }
+                // The ready request stays: the player is still in the room.
+                self.forget_match();
+                self.match_end = None;
+                self.result = Some(result);
+                self.state_message().into_iter().map(Action::Send).collect()
+            }
+            ServerMessage::ForfeitAccepted { match_id, reason } => {
+                if self.current_match.as_ref().is_some_and(|current| current.match_id != match_id) {
+                    return Vec::new();
+                }
+                self.forget_match();
+                self.reset_ready();
+                self.match_end = Some(MatchEnd::Forfeited(reason));
+                self.state_message().into_iter().map(Action::Send).collect()
+            }
+            ServerMessage::RoomDisbanded => {
+                self.forget_room();
+                self.match_end = Some(MatchEnd::RoomDisbanded);
+                Vec::new()
+            }
+            ServerMessage::RoomKicked => {
+                self.forget_room();
+                self.match_end = Some(MatchEnd::RoomKicked);
                 Vec::new()
             }
             ServerMessage::MatchCancelled { reason } => {
@@ -996,8 +1370,33 @@ impl ArenaSession {
         self.session_id = None;
         self.active_match_id = None;
         self.player = None;
+        // A song in progress is kept across the reconnect: its `final` and
+        // `play_ready` have to be said again, and the app keeps playing.
+        let kept = self.current_match.take().filter(|current| {
+            matches!(
+                current.stage,
+                MatchStage::Countdown | MatchStage::Playing | MatchStage::Finished
+            ) || (current.stage == MatchStage::Loading && current.play_ready_sent)
+        });
         self.forget_room();
+        self.current_match = kept;
         self.retry_at = Some((now.mono + delay, now.unix + delay.as_secs_f64()));
+    }
+}
+
+fn live_report(match_id: String, seq: u32, values: PlayValues, prepare: &Prepare) -> LiveReport {
+    LiveReport {
+        match_id,
+        seq,
+        exscore: values.exscore,
+        processed_notes: values.processed_notes,
+        minbp: values.minbp,
+        combo_break: values.combo_break,
+        max_combo: values.max_combo,
+        // The confirmed option from `prepare`; it must not change during the match.
+        play_option: prepare.play_option,
+        play_mode: prepare.play_mode.unwrap_or(7),
+        ln_mode: prepare.ln_mode.clone(),
     }
 }
 
@@ -1041,3 +1440,7 @@ mod match_setup_tests;
 #[cfg(test)]
 #[path = "load_start_tests.rs"]
 mod load_start_tests;
+
+#[cfg(test)]
+#[path = "live_final_tests.rs"]
+mod live_final_tests;

@@ -55,11 +55,12 @@ pub(super) fn graph_value(graph_type: i32, state: &SkinDrawState) -> f32 {
             let max = (state.total_notes * 2) as f32;
             if max > 0.0 { result_mybest_ex_score(state).unwrap_or(0) as f32 / max } else { 0.0 }
         }
-        // BARGRAPH_TARGETSCORERATE_NOW (114): target_ex_score * past_notes / (total_notes^2 * 2)
+        // BARGRAPH_TARGETSCORERATE_NOW (114): the target's EX score at the current note
+        // (integer floor of final * played / notes, spec 10.2) / (total_notes * 2).
         114 => {
-            let max = (state.total_notes as f64).powi(2) * 2.0;
+            let max = (state.total_notes * 2) as f32;
             if max > 0.0 {
-                (state.target_ex_score.unwrap_or(0) as f64 * state.past_notes as f64 / max) as f32
+                projected_score_at_progress(state.target_ex_score.unwrap_or(0), state) as f32 / max
             } else {
                 0.0
             }
@@ -75,7 +76,12 @@ pub(super) fn graph_value(graph_type: i32, state: &SkinDrawState) -> f32 {
             let max = (total_notes * 2) as f32;
             if max > 0.0 { state.ex_score as f32 / max } else { 0.0 }
         }
-        // BARGRAPH_LEVEL_BEGINNER..INSANE: same-folder level over the level bar limit.
+        // BARGRAPH_LEVEL (103): the selected chart's level over the maximum level (10), not
+        // clamped to 1 (spec 10.1).
+        103 => select_level_rate(state, None),
+        // BARGRAPH_LEVEL_BEGINNER..INSANE: same-folder level over the LR2 level bar limit.
+        // The original player (spec 10.1) instead shows only the selected difficulty over 10
+        // (`select_level_rate`, used for `value` / `ref` properties); LR2 skins rely on this.
         105..=109 => lr2_same_folder_level(state, (graph_type - 105) as usize)
             .map_or(0.0, |level| {
                 (level.max(0) as f32 / lr2_level_bar_limit(state) as f32).clamp(0.0, 1.0)

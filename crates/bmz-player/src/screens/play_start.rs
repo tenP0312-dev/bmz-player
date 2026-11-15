@@ -179,6 +179,9 @@ pub struct PlayStartOptions {
     pub rival_name: Option<String>,
     pub arrange_seed: Option<i64>,
     pub arrange_seed_2p: Option<i64>,
+    /// The seeds above were copied from another play (rival score or battle target)
+    /// instead of drawn fresh for this play. One-bass then adjusts the copied layout.
+    pub arrange_seed_borrowed: bool,
     /// Fresh play 用 Random Trainer seed。7K の通常 RANDOM かつ記録済み pattern が
     /// 無い場合だけ `PlaySessionOptions` 側で 1P seed より優先する。
     pub random_trainer_seed: Option<i64>,

@@ -95,6 +95,8 @@ pub(super) struct DecideTransition {
     pub(super) exit: DecideExit,
     pub(super) snapshot: RenderSnapshot,
     pub(super) title_override: Option<DecideTitleOverride>,
+    /// One-bass input is read once, when the decide exit finishes.
+    pub(super) one_bass_checked: bool,
 }
 
 /// How a started decide exit is drawn and how long it waits.
@@ -538,13 +540,32 @@ impl PlayOptionInput {
         control: &PhysicalControl,
         action: InputActionConfig,
     ) -> bool {
+        self.matches_action(device, control, |bound| play_action_matches(bound, action))
+    }
+
+    /// Like `is_action`, but E4 does not stand in for E1: only the binding of exactly `action`.
+    pub(super) fn is_exact_action(
+        &self,
+        device: DeviceId,
+        control: &PhysicalControl,
+        action: InputActionConfig,
+    ) -> bool {
+        self.matches_action(device, control, |bound| bound == action)
+    }
+
+    fn matches_action(
+        &self,
+        device: DeviceId,
+        control: &PhysicalControl,
+        matches_bound: impl Fn(InputActionConfig) -> bool,
+    ) -> bool {
         let has_device_specific_binding = self
             .action_bindings
             .iter()
             .any(|entry| entry.device == Some(device) && entry.control == *control);
         self.action_bindings.iter().any(|entry| {
             entry.control == *control
-                && play_action_matches(entry.action, action)
+                && matches_bound(entry.action)
                 && if has_device_specific_binding {
                     entry.device == Some(device)
                 } else {

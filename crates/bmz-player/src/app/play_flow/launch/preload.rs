@@ -36,14 +36,19 @@ impl WinitApp {
         );
     }
 
-    pub(super) fn apply_rival_play_overrides(&self, chart_id: i64, options: &mut PlayStartOptions) {
-        options.rival_name = self.select.select_ir.active_rival_display_name().map(str::to_string);
-        if self.boot.profile_config.cli_play.as_ref().is_some_and(|state| {
+    /// The CLI fixed the chart layout (seed, arrange or double option) for this run.
+    pub(super) fn cli_chart_layout_override_active(&self) -> bool {
+        self.boot.profile_config.cli_play.as_ref().is_some_and(|state| {
             state.0.seed.is_some()
                 || ["arrange", "arrange-2p", "double-option"]
                     .iter()
                     .any(|key| state.0.values.contains_key(*key))
-        }) {
+        })
+    }
+
+    pub(super) fn apply_rival_play_overrides(&self, chart_id: i64, options: &mut PlayStartOptions) {
+        options.rival_name = self.select.select_ir.active_rival_display_name().map(str::to_string);
+        if self.cli_chart_layout_override_active() {
             // An explicit CLI chart layout takes priority over profile rival replication.
             return;
         }
@@ -235,6 +240,7 @@ impl WinitApp {
             exit: DecideExit::Fadeout,
             snapshot,
             title_override,
+            one_bass_checked: false,
         }));
     }
 
@@ -825,6 +831,7 @@ fn apply_rival_score_replication(
             options.arrange_seed = Some(i64::from(seeds.p1.value()));
             options.arrange_seed_2p = seeds.p2.map(|seed| i64::from(seed.value()));
             options.legacy_arrange_seed = false;
+            options.arrange_seed_borrowed = true;
             copied_chart = true;
         } else {
             tracing::warn!(packed, ?key_mode, "ignoring invalid rival play seed");
@@ -861,6 +868,7 @@ fn apply_battle_target_replication(
     if let Some(seed) = arrangement.arrange_seed {
         options.arrange_seed = Some(seed);
         options.arrange_seed_2p = arrangement.arrange_seed_2p;
+        options.arrange_seed_borrowed = true;
         copied_chart = true;
     } else if let Some(packed_seed) = arrangement.packed_seed {
         let unpacked = u64::try_from(packed_seed).ok().and_then(|packed| {
@@ -872,6 +880,7 @@ fn apply_battle_target_replication(
         if let Some(seeds) = unpacked {
             options.arrange_seed = Some(i64::from(seeds.p1.value()));
             options.arrange_seed_2p = seeds.p2.map(|seed| i64::from(seed.value()));
+            options.arrange_seed_borrowed = true;
             copied_chart = true;
         } else {
             tracing::warn!(packed_seed, ?key_mode, "ignoring invalid battle target play seed");

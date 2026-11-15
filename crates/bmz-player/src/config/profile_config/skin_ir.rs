@@ -564,6 +564,7 @@ impl ProfileConfig {
                 guide_se: false,
                 note_retention: false,
                 ready_first_notes: false,
+                one_bass_input: false,
                 session_mode: Some(SessionMode::Normal),
                 auto_play: false,
                 bga: default_bga_mode(),

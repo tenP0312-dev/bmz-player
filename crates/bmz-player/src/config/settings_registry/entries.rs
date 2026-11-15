@@ -633,6 +633,14 @@ define_settings! {
             },
         format: |profile| format_bool_on_off(profile.play.ready_first_notes),
     }
+    OneBassInput(bool) {
+        value: [field play.one_bass_input],
+        adjust: |profile, _delta| {
+                profile.play.one_bass_input = !profile.play.one_bass_input;
+                true
+            },
+        format: |profile| format_bool_on_off(profile.play.one_bass_input),
+    }
     ShowLnTailCap(bool) {
         value: [field play.show_ln_tail_cap],
         adjust: |profile, _delta| {

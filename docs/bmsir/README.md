@@ -30,3 +30,12 @@ them without access to the BMS-IR repository.
 6. Do not copy Arena oraja (beatoraja-derived, GPL) code; implement from the
    described behavior. Commit messages do not include AI model names (operator
    decision; overrides the upstream AGENTS.md request).
+
+## One-bass wiring decisions (2026-11-12)
+
+- Implement PR 2 (wiring) with tests; the operator does the GUI check later.
+- Quick start without the decide screen: one-bass does not apply (keep the
+  normal RANDOM result).
+- E4 as START: follow the Arena oraja behavior described in
+  `SPEC_ONE_BASS_INPUT.md`; if the spec leaves it open, count only E1 (START).
+- Credentials files of removed providers (#1): keep them on disk, unread.

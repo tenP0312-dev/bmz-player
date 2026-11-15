@@ -121,6 +121,7 @@ fn profile_skin_entry_wait() -> anyhow::Result<()> {
         exit: DecideExit::Fadeout,
         snapshot: Default::default(),
         title_override: None,
+        one_bass_checked: false,
     }));
     let old = app.skin.skin_pipeline.bump_generation(SkinKind::Decide);
     app.skin.skin_pipeline.set_pending(SkinKind::Decide, true);

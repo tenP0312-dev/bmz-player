@@ -12,6 +12,7 @@
 //! Arena only ever connects to BMS-IR (`fork_policy::ensure_arena_url_allowed`).
 //! It never touches the gameplay thread, score storage or the IR provider queue.
 
+pub mod chart_lookup;
 pub mod connection;
 pub mod protocol;
 pub mod session;

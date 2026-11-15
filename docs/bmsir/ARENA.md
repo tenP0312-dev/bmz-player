@@ -78,3 +78,77 @@ B1 に入らないもの（後の段階）:
    許可前なら「拒否されました。このビルドは更新が必要です」になり、再接続を繰り返さないこと。
 4. 選曲 → 曲を開始 → 結果、と進んでも、プレイとスコア保存が普通に動くこと。
 5. OFF に戻すと、接続が切れて「オフ」になること。
+
+## 段階 B2-1: ルームと推薦
+
+B2 のうち、ルームの作成・入室、準備 OK、推薦、`chart` と `chart_check` までを入れました。
+曲の読み込み・`option_ready`・`prepare`・`play_ready`・`start_at` までの待機は B2-2（別の PR）です。
+
+### 画面
+
+選曲画面の右上に、接続済みのときだけ「Arena」のパネル（egui、既定は折りたたみ）を出します。
+プレイ中・決定画面・結果画面には出ません。パネルはゲームのキー入力を取りません（マウス操作）。
+
+| 操作 | 送るもの |
+|---|---|
+| ルームを作る | `room_entry`（`match_mode="private"` と土台の固定設定の全項目） |
+| ルームから抜ける | `queue_cancel` |
+| コードで入る | `room_entry`（`match_mode="private"`、`room_code`、あれば `room_password`） |
+| 準備 OK | `room_ready`（`ready`）と `state`（選曲画面で、ルームにいて、準備 OK のときだけ `ready=true`） |
+| 選択中の譜面を推薦 | `chart_nominate`（`match_id`、`chart_hash`=MD5）。推薦の時間中に 1 回だけ |
+| スキップ | `chart_nomination_skip`（`match_id`） |
+| （自動）候補の確認 | `chart_check`。手元の曲 DB の MD5 で引く。7KEY の譜面だけ `available=true` |
+
+試合の進み具合（`match_reserved` → `fill_started` → `nomination_started` → `nominations_revealed` → `chart`）と
+残り秒数（サーバー時刻に合わせた値）、取り消し・外された理由を出します。
+
+### 状態の扱い
+
+- 試合 ID と段階で古い応答を捨てます。`chart_check` の答えは、その時点の候補（`match_id` と MD5）と同じときだけ送ります。
+- `match_cancelled` / `match_released` で試合の状態を消し、準備 OK を外します（ルームは残ります）。
+- 切断・`replaced`・拒否でルームと試合の状態を消します。再接続後はサーバーが写しを送り直します。
+  再接続後に自動でルームへ戻る処理はありません（B3 で `active_match_id` と合わせて決めます）。
+- `hello_ok` の `active_match_id` が空なら、手元の試合の状態を消します。
+- 試合中は新しいルームへ入れません。
+
+### サーバーの項目名（`ARENA_SERVER_MESSAGES.md` に合わせた部分）
+
+項目名と型は [ARENA_SERVER_MESSAGES.md](ARENA_SERVER_MESSAGES.md) を正とします。
+
+| 場面 | BMZ の扱い |
+|---|---|
+| `room_entry`（作る） | 全項目を送る：`score_rule=exscore`、`forced_gauge=free`、`chart_scope=free`、`ruleset_profile`（`hello` と同じ）、`ln_mode=LN`、`nomination_policy=all`、`nomination_seconds=60`、`option_seconds=10`、`intermission_seconds=0`、`series_format=single`、`first_to_wins=2`、`spectator_public=false`、`force_host_option=false`、`allowed_play_modes=[7]`。`public` / `seconds` / `password` という名前の項目はサーバーにありません |
+| `room_entry`（入る） | `room_code` と、あれば `room_password` だけ（ルールは部屋のものになる） |
+| `room_settings`（ホスト） | 省略した時間・形式の項目はサーバーが既定に戻すため、`ln_mode` 以外の全項目を送る。パネルのボタン「ルームの設定を送り直す」（ホストのみ） |
+| ルームから抜ける | `queue_cancel`。試合前は即時に部屋を消す。試合中は `match_released` / `forfeit_accepted` まで待つ |
+| `room_status` | `players[]`（`player_id`、`name`、`host`、`participating`、`pending`、`ready`）、`rules.room_host_id`、`rules.ln_mode`。自分の準備 OK は手元の要求を優先し、サーバーの古い `room_status` で上書きしない |
+| `nomination_started` / `nomination_status` | `deadline`、`can_nominate`、`required_count`、`submitted_count`、`retry_reason`、`players[].submitted`。「推薦済み」はサーバーの `submitted` に従う。`retry_reason` があれば再推薦を促す |
+| `players_updated` | `player_ids` の数を人数にする（現在の試合の `match_id` のときだけ） |
+| `nominations_revealed` | `nominations[]`、`selected_player_id`、`chart.md5`、`reroll_count` |
+| `ln_mode` | 文字列（`LN` / `CN` / `HCN`、大文字にそろえる） |
+| `ready` | `state` が `select` のときだけ有効（サーバーは `state` のたびに上書きする）。BMZ は `select` 以外では `ready=false` を送る |
+
+まだ読んでいない・使っていないもの：`match_reserved.rules`、`chart.rules`、`chat_history`、`result`（B3）。
+`chat_send` の応答や `chart` の追加キーは資料でも「未確認」です。
+
+## 練習・AUTOPLAY・リプレイ・コースの `state` と `ready`（案）
+
+決定 5 の案です（B2-1 では実装していません。`state` は今のまま `play` です）。
+
+| BMZ の場面 | `state` | 理由 |
+|---|---|---|
+| 通常の手動プレイ（NORMAL） | `play` | 仕様書 3.3 |
+| G-BATTLE | `play` | 仕様書 3.3（NORMAL と G-BATTLE は `play`） |
+| 結果（単曲） | `result` | 同上 |
+| コース・段位（プレイと結果） | `course` | 仕様書 3.3 |
+| PRACTICE | `practice` | 同上 |
+| AUTOPLAY・AUTOPLAY BATTLE | `autoplay` | 同上 |
+| リプレイ再生 | `replay` | 同上 |
+| 決定画面 | `decide` | 同上 |
+
+`ready` は仕様書 3.3 のとおり、`select` のときと、`result` で通常の IR 送信が終わったときだけ `true` にできます。
+B2-1 は `select` のみ実装済みです。`result` の側は、IR 送信の完了を知る入口が要るため B3（結果の扱い）で足す案です。
+`practice` / `autoplay` / `replay` / `course` の間は `ready=false` 固定で、試合の `match_reserved` が来たら
+「通常のプレイ中なら終わるまで待つ」（`finish_current_song`）扱いにして選曲に戻った時点で再び `ready` を許す案です。
+これらの区別の実装には、`AppSceneKind` が Play のまま練習・AUTOPLAY・リプレイ・コースを含むため、
+play の種類を app 側から取り出す入口（`app/play_flow`）が要ります。

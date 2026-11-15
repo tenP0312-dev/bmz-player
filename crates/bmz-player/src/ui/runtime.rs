@@ -352,6 +352,9 @@ impl EguiLayer {
             if update_dialog_allowed && let Some(dialog) = update_dialog {
                 update_dialog_action = build_update_dialog(ui.ctx(), dialog, text);
             }
+            if info.scene == "Select" {
+                build_arena_select_panel(ui.ctx(), arena, text);
+            }
             if let Some(practice_ctx) = practice.as_mut() {
                 let panel = build_practice_panel(ui.ctx(), practice_ctx, text);
                 practice_start |= panel.start_play;

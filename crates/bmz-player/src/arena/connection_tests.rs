@@ -286,3 +286,91 @@ fn an_inactive_controller_reports_why_and_ignores_commands() {
     controller.reconnect();
     controller.shutdown();
 }
+
+/// Reads client messages until one of `kind` arrives (pings and `state` are skipped).
+async fn recv_kind(server: &mut Server, kind: &str) -> Value {
+    loop {
+        let message = recv(server).await;
+        if message["type"] == kind {
+            return message;
+        }
+    }
+}
+
+#[tokio::test]
+async fn room_nomination_and_chart_check_over_the_wire() {
+    let md5 = "0123456789abcdef0123456789abcdef";
+    let (listener, url) = bind().await;
+    let controller =
+        ArenaController::spawn_with_timing(url, hello(), ScreenState::Select, timing());
+    let (mut server, _) = accept_and_welcome(&listener).await;
+    wait_for(&controller, "connected", |p| p.status == ConnectionStatus::Connected).await;
+
+    controller.handle().create_room();
+    let entry = recv_kind(&mut server, "room_entry").await;
+    assert_eq!(entry["match_mode"], "private");
+    assert_eq!(entry["room_name"], serde_json::Value::Null);
+    assert_eq!(entry["ln_mode"], "LN");
+    assert_eq!(entry["allowed_play_modes"], json!([7]));
+    assert_eq!(entry["chart_scope"], "free");
+
+    reply(
+        &mut server,
+        json!({"type":"room_status","room_code":"AB12","rules":{"room_host_id":4242},
+               "players":[{"player_id":4242,"name":"me","host":true,"participating":true,
+                           "pending":false,"ready":false}]}),
+    )
+    .await;
+    wait_for(&controller, "room players", |p| {
+        p.room.as_ref().is_some_and(|room| room.players.len() == 1 && room.host_id == Some(4242))
+    })
+    .await;
+    controller.handle().set_ready(true);
+    assert_eq!(recv_kind(&mut server, "room_ready").await["ready"], true);
+    assert_eq!(recv_kind(&mut server, "state").await["ready"], true);
+
+    reply(
+        &mut server,
+        json!({"type":"match_reserved","match_id":"m1","ruleset_profile":"lr2","ln_mode":"LN",
+               "finish_current_song":false,"reservation_timeout":30}),
+    )
+    .await;
+    reply(
+        &mut server,
+        json!({"type":"nomination_started","match_id":"m1","deadline":now_unix() + 30.0,
+               "can_nominate":true,"required_count":1,"submitted_count":0,"players":[]}),
+    )
+    .await;
+    wait_for(&controller, "nominating", |p| {
+        p.current_match
+            .as_ref()
+            .is_some_and(|m| m.stage == crate::arena::session::MatchStage::Nominating)
+    })
+    .await;
+
+    controller.handle().nominate(md5.into());
+    let nominate = recv_kind(&mut server, "chart_nominate").await;
+    assert_eq!(nominate["match_id"], "m1");
+    assert_eq!(nominate["chart_hash"], md5);
+
+    reply(&mut server, json!({"type":"nomination_accepted"})).await;
+    reply(&mut server, json!({"type":"chart","match_id":"m1","chart":{"md5":md5,"title":"t"}}))
+        .await;
+    wait_for(&controller, "chart check request", |p| p.pending_chart_check.is_some()).await;
+    controller.handle().report_chart_check("m1".into(), md5.into(), true, 800, 7);
+    let check = recv_kind(&mut server, "chart_check").await;
+    assert_eq!(
+        check,
+        json!({"type":"chart_check","match_id":"m1","chart_hash":md5,"available":true,
+               "totalnotes":800,"play_mode":7})
+    );
+
+    reply(&mut server, json!({"type":"match_cancelled","reason":"load_timeout"})).await;
+    wait_for(&controller, "match cleared", |p| p.current_match.is_none() && p.match_end.is_some())
+        .await;
+
+    controller.handle().leave_room();
+    assert_eq!(recv_kind(&mut server, "queue_cancel").await, json!({"type":"queue_cancel"}));
+    wait_for(&controller, "room left", |p| p.room.is_none()).await;
+    controller.shutdown();
+}

@@ -8,7 +8,11 @@
 use std::collections::VecDeque;
 use std::time::Duration;
 
-use super::protocol::{ClientMessage, Hello, PlayerStatus, ScreenState, ServerMessage};
+use super::protocol::{
+    ChartAnnounced, ChartCheck, ClientMessage, Hello, NominationInfo, NominationsRevealed,
+    PlayerStatus, RoomEntry, RoomPlayer, RoomRules, RoomSettings, RoomStatusInfo, ScreenState,
+    ServerMessage,
+};
 
 /// `ping` every 5 seconds.
 pub const PING_INTERVAL: Duration = Duration::from_secs(5);
@@ -111,11 +115,75 @@ pub struct Notice {
     pub message: String,
 }
 
+/// Where the match is, as far as B2 follows it (up to the chosen chart).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatchStage {
+    Reserved,
+    Filling,
+    Nominating,
+    /// Nominations are revealed; the server is choosing.
+    Revealed,
+    /// The chart is decided and the match is loading.
+    ChartChosen,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchView {
+    pub match_id: String,
+    pub stage: MatchStage,
+    /// The match ends the current play first (`finish_current_song`).
+    pub finish_current_song: bool,
+    pub player_count: Option<u32>,
+    pub max_players: Option<u32>,
+    /// Server time (UNIX seconds) of the fill or nomination deadline.
+    pub deadline: Option<f64>,
+    /// The server accepted this player's nomination (or skip).
+    pub nominated: bool,
+    /// `false` when the server says this player has no nomination to make
+    /// (for example `host` policy and not the host).
+    pub can_nominate: bool,
+    /// Why the server asked again (`retry_reason`), empty normally.
+    pub retry_reason: String,
+    pub submitted_count: Option<u32>,
+    pub required_count: Option<u32>,
+    pub revealed: Option<NominationsRevealed>,
+    pub chart: Option<ChartAnnounced>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RoomView {
+    /// Known once `room_status` arrives.
+    pub code: Option<String>,
+    /// What this player asked for. The server accepts `ready` only while the
+    /// reported state is `select`, so the flag sent with `state` also needs the screen.
+    pub ready: bool,
+    pub host_id: Option<u64>,
+    pub ln_mode: String,
+    /// Members in entry order, with the server-side ready flag.
+    pub players: Vec<RoomPlayer>,
+}
+
+/// The chart check the window thread has to answer (it owns the song library).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChartCheckRequest {
+    pub match_id: String,
+    pub md5: String,
+}
+
+/// Why the match in view went away.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MatchEnd {
+    Cancelled(String),
+    Released,
+}
+
 /// Everything the panel needs, copied out after each step.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ArenaPanelState {
     pub status: ConnectionStatus,
     pub session_id: Option<String>,
+    /// This player's BMS-IR ID (the `hello` one).
+    pub own_player_id: Option<u64>,
     /// Server time minus local time, in seconds.
     pub clock_offset_secs: Option<f64>,
     pub round_trip_secs: Option<f64>,
@@ -124,6 +192,12 @@ pub struct ArenaPanelState {
     pub notice: Option<Notice>,
     /// The player's own rating from the latest `arena_status`.
     pub player: Option<PlayerStatus>,
+    pub room: Option<RoomView>,
+    pub current_match: Option<MatchView>,
+    pub pending_chart_check: Option<ChartCheckRequest>,
+    pub match_end: Option<MatchEnd>,
+    /// MD5 (lowercase hex) of the chart under the select cursor, if any.
+    pub selected_chart_md5: Option<String>,
     pub last_disconnect: Option<DisconnectReason>,
     /// Wall-clock time of the next reconnect attempt, while `Reconnecting`.
     pub retry_at_unix: Option<f64>,
@@ -140,6 +214,28 @@ pub enum Event {
     SetScreen(ScreenState),
     /// The user asked to connect again (after a refusal or `replaced`).
     ManualReconnect,
+    RoomCreate,
+    RoomJoin {
+        code: String,
+        password: Option<String>,
+    },
+    SetReady(bool),
+    /// Leave the room (`queue_cancel`).
+    RoomLeave,
+    /// Host: send the fixed foundation rules again (`room_settings`, all fields).
+    RoomSettingsApply,
+    /// Nominate this chart (lowercase hex MD5) for the match.
+    Nominate(String),
+    SkipNomination,
+    /// The window thread's answer to [`ArenaPanelState::pending_chart_check`].
+    ChartChecked {
+        match_id: String,
+        md5: String,
+        available: bool,
+        totalnotes: u32,
+        play_mode: u32,
+    },
+    SetSelectedChart(Option<String>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -177,6 +273,11 @@ pub struct ArenaSession {
     active_match_id: Option<String>,
     notice: Option<Notice>,
     player: Option<PlayerStatus>,
+    room: Option<RoomView>,
+    current_match: Option<MatchView>,
+    pending_chart_check: Option<ChartCheckRequest>,
+    match_end: Option<MatchEnd>,
+    selected_chart_md5: Option<String>,
     last_disconnect: Option<DisconnectReason>,
     disconnected_since: Option<Duration>,
     retry_at: Option<(Duration, f64)>,
@@ -204,6 +305,11 @@ impl ArenaSession {
             active_match_id: None,
             notice: None,
             player: None,
+            room: None,
+            current_match: None,
+            pending_chart_check: None,
+            match_end: None,
+            selected_chart_md5: None,
             last_disconnect: None,
             disconnected_since: None,
             retry_at: None,
@@ -219,9 +325,26 @@ impl ArenaSession {
         self.unknown_messages
     }
 
-    /// `ready` is always false in the foundation: it needs a room (B2).
+    /// `ready` is true only on the select screen, inside a room, once the player
+    /// pressed "ready" (spec 3.3). The result-screen case comes with B3.
     fn desired_ready(&self) -> bool {
-        false
+        self.screen == ScreenState::Select && self.room.as_ref().is_some_and(|room| room.ready)
+    }
+
+    fn forget_match(&mut self) {
+        self.current_match = None;
+        self.pending_chart_check = None;
+    }
+
+    fn reset_ready(&mut self) {
+        if let Some(room) = self.room.as_mut() {
+            room.ready = false;
+        }
+    }
+
+    fn forget_room(&mut self) {
+        self.room = None;
+        self.forget_match();
     }
 
     /// Server time for a local wall-clock time, once the clock is synchronised.
@@ -240,11 +363,17 @@ impl ArenaSession {
         ArenaPanelState {
             status,
             session_id: self.session_id.clone(),
+            own_player_id: Some(self.hello.player_id),
             clock_offset_secs: self.clock_offset,
             round_trip_secs: self.round_trip,
             active_match_id: self.active_match_id.clone(),
             notice: self.notice.clone(),
             player: self.player,
+            room: self.room.clone(),
+            current_match: self.current_match.clone(),
+            pending_chart_check: self.pending_chart_check.clone(),
+            match_end: self.match_end.clone(),
+            selected_chart_md5: self.selected_chart_md5.clone(),
             last_disconnect: self.last_disconnect,
             retry_at_unix: self.retry_at.map(|(_, unix)| unix),
         }
@@ -277,7 +406,110 @@ impl ArenaSession {
                 }
                 Vec::new()
             }
+            Event::SetSelectedChart(md5) => {
+                self.selected_chart_md5 = md5;
+                Vec::new()
+            }
+            Event::RoomCreate => self.enter_room(RoomEntry::create(self.hello.ruleset_profile)),
+            Event::RoomLeave => {
+                if self.phase != Phase::Connected || self.room.is_none() {
+                    return Vec::new();
+                }
+                // Before a match the server removes us at once. With a match the
+                // server answers with `match_released` / `forfeit_accepted`, so the
+                // match view stays until then.
+                if self.current_match.is_none() {
+                    self.room = None;
+                }
+                let mut actions = vec![Action::Send(ClientMessage::QueueCancel {})];
+                actions.extend(self.state_message().into_iter().map(Action::Send));
+                actions
+            }
+            Event::RoomSettingsApply => {
+                let is_host = self
+                    .room
+                    .as_ref()
+                    .is_some_and(|room| room.host_id == Some(self.hello.player_id));
+                if self.phase != Phase::Connected || !is_host {
+                    return Vec::new();
+                }
+                vec![Action::Send(ClientMessage::RoomSettings(RoomSettings {
+                    rules: Box::new(RoomRules::foundation(self.hello.ruleset_profile)),
+                }))]
+            }
+            Event::RoomJoin { code, password } => {
+                let code = code.trim().to_owned();
+                if code.is_empty() {
+                    return Vec::new();
+                }
+                self.enter_room(RoomEntry::join(code, password.filter(|p| !p.is_empty())))
+            }
+            Event::SetReady(ready) => {
+                if self.phase != Phase::Connected {
+                    return Vec::new();
+                }
+                let Some(room) = self.room.as_mut() else {
+                    return Vec::new();
+                };
+                room.ready = ready;
+                let mut actions = vec![Action::Send(ClientMessage::RoomReady { ready })];
+                actions.extend(self.state_message().into_iter().map(Action::Send));
+                actions
+            }
+            Event::Nominate(md5) => {
+                let md5 = md5.to_ascii_lowercase();
+                if md5.len() != 32 || !md5.bytes().all(|b| b.is_ascii_hexdigit()) {
+                    return Vec::new();
+                }
+                self.nomination(|match_id| ClientMessage::ChartNominate {
+                    match_id,
+                    chart_hash: md5,
+                })
+            }
+            Event::SkipNomination => {
+                self.nomination(|match_id| ClientMessage::ChartNominationSkip { match_id })
+            }
+            Event::ChartChecked { match_id, md5, available, totalnotes, play_mode } => {
+                // An answer for an older candidate (re-roll) or an ended match is dropped.
+                let current = ChartCheckRequest { match_id: match_id.clone(), md5: md5.clone() };
+                if self.phase != Phase::Connected
+                    || self.pending_chart_check.as_ref() != Some(&current)
+                {
+                    return Vec::new();
+                }
+                self.pending_chart_check = None;
+                vec![Action::Send(ClientMessage::ChartCheck(ChartCheck {
+                    match_id,
+                    chart_hash: md5,
+                    available,
+                    totalnotes,
+                    play_mode,
+                }))]
+            }
         }
+    }
+
+    fn enter_room(&mut self, entry: RoomEntry) -> Vec<Action> {
+        if self.phase != Phase::Connected || self.current_match.is_some() {
+            return Vec::new();
+        }
+        self.match_end = None;
+        self.room = Some(RoomView::default());
+        vec![Action::Send(ClientMessage::RoomEntry(entry))]
+    }
+
+    /// Sends a nomination message once, and only while nominations are open.
+    fn nomination(&mut self, build: impl FnOnce(String) -> ClientMessage) -> Vec<Action> {
+        if self.phase != Phase::Connected {
+            return Vec::new();
+        }
+        let Some(current) = self.current_match.as_ref() else {
+            return Vec::new();
+        };
+        if current.stage != MatchStage::Nominating || current.nominated || !current.can_nominate {
+            return Vec::new();
+        }
+        vec![Action::Send(build(current.match_id.clone()))]
     }
 
     fn on_opened(&mut self, now: Now) -> Vec<Action> {
@@ -292,10 +524,29 @@ impl ArenaSession {
         vec![Action::Send(ClientMessage::Hello(self.hello.clone()))]
     }
 
+    /// The match in view if `match_id` is its id (an empty id matches: the
+    /// server always sends it, but a missing one is not a reason to drop a message).
+    fn current_match_for(&mut self, match_id: &str) -> Option<&mut MatchView> {
+        self.current_match
+            .as_mut()
+            .filter(|current| match_id.is_empty() || current.match_id == match_id)
+    }
+
+    fn apply_room_status(&mut self, status: RoomStatusInfo) {
+        let room = self.room.get_or_insert_with(RoomView::default);
+        if status.room_code.is_some() {
+            room.code = status.room_code;
+        }
+        room.host_id = status.room_host_id;
+        room.ln_mode = status.ln_mode;
+        room.players = status.players;
+    }
+
     fn on_message(&mut self, now: Now, message: ServerMessage) -> Vec<Action> {
         if !matches!(self.phase, Phase::Authenticating | Phase::Connected) {
             return Vec::new();
         }
+        let self_id = self.hello.player_id;
         self.last_rx = now.mono;
         match message {
             ServerMessage::HelloOk(ok) => {
@@ -308,6 +559,10 @@ impl ArenaSession {
                 self.notice = None;
                 self.session_id = Some(ok.session_id).filter(|id| !id.is_empty());
                 self.active_match_id = Some(ok.active_match_id).filter(|id| !id.is_empty());
+                if self.active_match_id.is_none() {
+                    // The server has no match for us: drop the local one (spec 3.6).
+                    self.forget_match();
+                }
                 if let Some(server_time) = ok.server_time {
                     // A first estimate; the first pong refines it with the round trip.
                     self.clock_offset = Some(server_time - now.unix);
@@ -324,6 +579,7 @@ impl ArenaSession {
             ServerMessage::Error { code, message } => {
                 if let Some(kind) = refusal_kind(&code) {
                     self.phase = Phase::Refused(kind);
+                    self.forget_room();
                     self.notice = Some(Notice { code, message });
                     self.retry_at = None;
                     return vec![Action::Close];
@@ -334,12 +590,117 @@ impl ArenaSession {
             }
             ServerMessage::Replaced => {
                 self.phase = Phase::Replaced;
+                self.forget_room();
                 self.retry_at = None;
                 vec![Action::Close]
             }
             ServerMessage::ArenaStatus(player) => {
                 self.player = Some(player);
                 Vec::new()
+            }
+            ServerMessage::RoomStatus(status) => {
+                self.apply_room_status(status);
+                Vec::new()
+            }
+            ServerMessage::MatchReserved(reserved) => {
+                self.match_end = None;
+                self.pending_chart_check = None;
+                self.current_match = Some(MatchView {
+                    match_id: reserved.match_id,
+                    stage: MatchStage::Reserved,
+                    finish_current_song: reserved.finish_current_song,
+                    player_count: None,
+                    max_players: None,
+                    deadline: None,
+                    nominated: false,
+                    can_nominate: true,
+                    retry_reason: String::new(),
+                    submitted_count: None,
+                    required_count: None,
+                    revealed: None,
+                    chart: None,
+                });
+                // The match fixes the "state" the server expects (spec 3.4 step 2).
+                self.sent_state = None;
+                self.state_message().into_iter().map(Action::Send).collect()
+            }
+            ServerMessage::FillStarted { deadline, player_count, max_players } => {
+                if let Some(current) = self.current_match.as_mut() {
+                    current.stage = MatchStage::Filling;
+                    current.deadline = deadline;
+                    current.player_count = player_count;
+                    current.max_players = max_players;
+                }
+                Vec::new()
+            }
+            ServerMessage::PlayersUpdated { match_id, player_ids } => {
+                if let Some(current) =
+                    self.current_match.as_mut().filter(|current| current.match_id == match_id)
+                {
+                    current.player_count = Some(player_ids.len() as u32);
+                }
+                Vec::new()
+            }
+            ServerMessage::NominationStarted(info) => {
+                if let Some(current) = self.current_match_for(&info.match_id) {
+                    current.stage = MatchStage::Nominating;
+                    apply_nomination(current, &info, self_id);
+                }
+                Vec::new()
+            }
+            ServerMessage::NominationStatus(info) => {
+                if let Some(current) = self.current_match_for(&info.match_id)
+                    && current.stage == MatchStage::Nominating
+                {
+                    apply_nomination(current, &info, self_id);
+                }
+                Vec::new()
+            }
+            ServerMessage::NominationAccepted => {
+                if let Some(current) = self.current_match.as_mut() {
+                    current.nominated = true;
+                }
+                Vec::new()
+            }
+            ServerMessage::NominationsRevealed(revealed) => {
+                if let Some(current) = self.current_match_for(&revealed.match_id) {
+                    current.stage = MatchStage::Revealed;
+                    current.revealed = Some(revealed);
+                }
+                Vec::new()
+            }
+            ServerMessage::Chart(chart) => {
+                let Some(current) = self.current_match.as_mut() else {
+                    return Vec::new();
+                };
+                if chart.match_id.as_deref().is_some_and(|id| id != current.match_id) {
+                    return Vec::new();
+                }
+                current.stage = MatchStage::ChartChosen;
+                self.pending_chart_check = Some(ChartCheckRequest {
+                    match_id: current.match_id.clone(),
+                    md5: chart.md5.clone(),
+                });
+                current.chart = Some(chart);
+                Vec::new()
+            }
+            ServerMessage::OptionSelect(_)
+            | ServerMessage::Prepare(_)
+            | ServerMessage::Start(_) => {
+                // Loading and starting come in the next stage (B2-2).
+                Vec::new()
+            }
+            ServerMessage::MatchCancelled { reason } => {
+                self.forget_match();
+                self.reset_ready();
+                self.match_end = Some(MatchEnd::Cancelled(reason));
+                self.state_message().into_iter().map(Action::Send).collect()
+            }
+            ServerMessage::MatchReleased => {
+                self.forget_match();
+                self.reset_ready();
+                self.match_end = Some(MatchEnd::Released);
+                self.state_message().into_iter().map(Action::Send).collect()
             }
             ServerMessage::Unknown(kind) => {
                 self.unknown_messages += 1;
@@ -428,10 +789,33 @@ impl ArenaSession {
         self.session_id = None;
         self.active_match_id = None;
         self.player = None;
+        self.forget_room();
         self.retry_at = Some((now.mono + delay, now.unix + delay.as_secs_f64()));
     }
+}
+
+/// Copies a `nomination_started` / `nomination_status` payload into the view.
+/// "Nominated" comes from the server's own bookkeeping (this player's
+/// `submitted`, or the counts against the required count), so a restarted
+/// nomination (`retry_reason`) opens again.
+fn apply_nomination(current: &mut MatchView, info: &NominationInfo, self_id: u64) {
+    current.deadline = info.deadline;
+    current.can_nominate = info.can_nominate.unwrap_or(true);
+    current.retry_reason = info.retry_reason.clone();
+    current.submitted_count = info.submitted_count;
+    current.required_count = info.required_count;
+    let own = info.players.iter().find(|player| player.player_id == self_id);
+    current.nominated = match (own, info.required_count, info.submitted_count) {
+        (Some(player), _, _) => player.submitted,
+        (None, Some(required), Some(submitted)) => required > 0 && submitted >= required,
+        _ => info.your_nomination.is_some(),
+    };
 }
 
 #[cfg(test)]
 #[path = "session_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "match_setup_tests.rs"]
+mod match_setup_tests;

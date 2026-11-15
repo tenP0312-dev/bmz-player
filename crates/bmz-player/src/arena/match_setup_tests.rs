@@ -295,10 +295,10 @@ fn a_chart_for_another_match_is_ignored() {
 fn cancel_and_release_clear_the_match_and_the_ready_flag() {
     for end in [
         (
-            ServerMessage::MatchCancelled { reason: "load_timeout".into() },
+            ServerMessage::MatchCancelled { match_id: "m1".into(), reason: "load_timeout".into() },
             MatchEnd::Cancelled("load_timeout".into()),
         ),
-        (ServerMessage::MatchReleased, MatchEnd::Released),
+        (ServerMessage::MatchReleased { match_id: "m1".into() }, MatchEnd::Released),
     ] {
         let mut session = connected();
         in_nomination(&mut session, "m1");
@@ -319,7 +319,7 @@ fn cancel_and_release_clear_the_match_and_the_ready_flag() {
 fn a_new_match_clears_the_previous_end_notice() {
     let mut session = connected();
     in_nomination(&mut session, "m1");
-    recv(&mut session, ServerMessage::MatchReleased);
+    recv(&mut session, ServerMessage::MatchReleased { match_id: "m1".into() });
     recv(&mut session, reserved("m2"));
     assert_eq!(session.panel().match_end, None);
     assert_eq!(session.panel().current_match.unwrap().match_id, "m2");
@@ -422,7 +422,7 @@ fn leaving_during_a_match_waits_for_the_servers_release() {
     assert_eq!(json(&messages[0]), serde_json::json!({"type":"queue_cancel"}));
     assert!(session.panel().room.is_some());
     assert!(session.panel().current_match.is_some());
-    recv(&mut session, ServerMessage::MatchReleased);
+    recv(&mut session, ServerMessage::MatchReleased { match_id: "m1".into() });
     assert!(session.panel().current_match.is_none());
 }
 

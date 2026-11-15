@@ -230,8 +230,8 @@ fn start_gives_the_app_the_server_time_to_begin() {
 #[test]
 fn cancel_and_release_drop_the_load_state() {
     for end in [
-        ServerMessage::MatchCancelled { reason: "load_timeout".into() },
-        ServerMessage::MatchReleased,
+        ServerMessage::MatchCancelled { match_id: "m1".into(), reason: "load_timeout".into() },
+        ServerMessage::MatchReleased { match_id: "m1".into() },
     ] {
         let mut session = connected();
         in_loading(&mut session);

@@ -512,9 +512,12 @@ pub enum ServerMessage {
     Prepare(Prepare),
     Start(Start),
     MatchCancelled {
+        match_id: String,
         reason: String,
     },
-    MatchReleased,
+    MatchReleased {
+        match_id: String,
+    },
     /// `live` from the server: everyone's progress.
     LiveSnapshot(LiveSnapshot),
     /// The match is over.
@@ -532,7 +535,10 @@ pub enum ServerMessage {
         start_at: Option<f64>,
     },
     /// The host disbanded the room.
-    RoomDisbanded,
+    /// `match_id` is empty when no match was running.
+    RoomDisbanded {
+        match_id: String,
+    },
     /// The host removed this player from the room.
     RoomKicked,
     /// Any other (or later-stage) message type.
@@ -690,8 +696,10 @@ pub fn parse_server_message(text: &str) -> Result<ServerMessage, serde_json::Err
             start_at: number("start_at"),
             ln_mode: ln_mode_of(object),
         }),
-        "match_cancelled" => ServerMessage::MatchCancelled { reason: string("reason") },
-        "match_released" => ServerMessage::MatchReleased,
+        "match_cancelled" => {
+            ServerMessage::MatchCancelled { match_id: string("match_id"), reason: string("reason") }
+        }
+        "match_released" => ServerMessage::MatchReleased { match_id: string("match_id") },
         "live" => ServerMessage::LiveSnapshot(LiveSnapshot {
             match_id: string("match_id"),
             state: string("state"),
@@ -724,7 +732,7 @@ pub fn parse_server_message(text: &str) -> Result<ServerMessage, serde_json::Err
             state: string("state"),
             start_at: number("start_at"),
         },
-        "room_disbanded" => ServerMessage::RoomDisbanded,
+        "room_disbanded" => ServerMessage::RoomDisbanded { match_id: string("match_id") },
         "room_kicked" => ServerMessage::RoomKicked,
         other => ServerMessage::Unknown(other.to_owned()),
     })

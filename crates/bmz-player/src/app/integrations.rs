@@ -158,6 +158,7 @@ impl WinitApp {
             handle.set_selected_chart(selected.clone());
             self.integrations.arena_selected_md5 = selected;
         }
+        self.sync_arena_play(scene_kind);
         let Some(request) = handle.panel().pending_chart_check else {
             self.integrations.arena_answered_check = None;
             return;

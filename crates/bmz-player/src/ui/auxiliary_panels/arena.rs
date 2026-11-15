@@ -128,6 +128,14 @@ fn build_match_status(
         MatchStage::Nominating => tr!(text, "arena-stage-nominating"),
         MatchStage::Revealed => tr!(text, "arena-stage-revealed"),
         MatchStage::ChartChosen => tr!(text, "arena-stage-chart"),
+        MatchStage::Options => tr!(
+            text,
+            "arena-stage-options",
+            "ready" => current.option.as_ref().and_then(|o| o.ready_count).unwrap_or(0),
+            "count" => current.option.as_ref().and_then(|o| o.player_count).unwrap_or(0)
+        ),
+        MatchStage::Loading => tr!(text, "arena-stage-loading"),
+        MatchStage::Countdown => tr!(text, "arena-stage-countdown"),
     };
     ui.label(stage);
     if let (Some(deadline), Some(offset)) = (current.deadline, panel.clock_offset_secs) {
@@ -163,6 +171,15 @@ fn build_match_status(
                     arena.skip_nomination();
                 }
             });
+        }
+    }
+    if current.stage == MatchStage::Options
+        && let Some(option) = &current.option
+    {
+        if option.ready {
+            ui.label(tr!(text, "arena-option-sent"));
+        } else if ui.button(tr!(text, "arena-option-ready")).clicked() {
+            arena.option_ready();
         }
     }
     if let Some(chart) = &current.chart {

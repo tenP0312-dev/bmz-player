@@ -96,6 +96,11 @@ pub enum ClientMessage {
     QueueCancel {},
     OptionReady(OptionReady),
     PlayReady(PlayReady),
+    /// Before the countdown this leaves the match (`match_released`); the
+    /// loading step uses it when the chart cannot be started.
+    Forfeit {
+        match_id: String,
+    },
 }
 
 /// `option_ready`: this player's arrange option (`1P + 10 * 2P + 100 * FLIP`).

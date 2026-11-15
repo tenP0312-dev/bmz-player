@@ -374,3 +374,72 @@ async fn room_nomination_and_chart_check_over_the_wire() {
     wait_for(&controller, "room left", |p| p.room.is_none()).await;
     controller.shutdown();
 }
+
+#[tokio::test]
+async fn option_prepare_play_ready_and_start_over_the_wire() {
+    let md5 = "0123456789abcdef0123456789abcdef";
+    let (listener, url) = bind().await;
+    let controller =
+        ArenaController::spawn_with_timing(url, hello(), ScreenState::Select, timing());
+    let (mut server, _) = accept_and_welcome(&listener).await;
+    wait_for(&controller, "connected", |p| p.status == ConnectionStatus::Connected).await;
+
+    controller.handle().create_room();
+    recv_kind(&mut server, "room_entry").await;
+    reply(
+        &mut server,
+        json!({"type":"match_reserved","match_id":"m1","ruleset_profile":"lr2","ln_mode":"LN",
+               "finish_current_song":false,"reservation_timeout":30}),
+    )
+    .await;
+    reply(&mut server, json!({"type":"chart","match_id":"m1","chart":{"md5":md5,"title":"t"}}))
+        .await;
+    reply(
+        &mut server,
+        json!({"type":"option_select","match_id":"m1","deadline":now_unix() + 30.0,"ready":false,
+               "ready_count":0,"player_count":2,"play_mode":7,"ln_mode":"LN"}),
+    )
+    .await;
+    wait_for(&controller, "option phase", |p| {
+        p.current_match.as_ref().is_some_and(|m| m.option.is_some())
+    })
+    .await;
+
+    controller.handle().set_option_choice(103);
+    controller.handle().option_ready();
+    let option = recv_kind(&mut server, "option_ready").await;
+    assert_eq!(
+        option,
+        json!({"type":"option_ready","match_id":"m1","play_option":103,"play_mode":7,
+               "ln_mode":"LN"})
+    );
+
+    reply(
+        &mut server,
+        json!({"type":"prepare","match_id":"m1","chart":{"md5":md5,"totalnotes":900},
+               "load_deadline":now_unix() + 120.0,"ln_mode":"LN","random_seed":42,
+               "play_option":103,"play_mode":7,"rules":{"ruleset_profile":"lr2"}}),
+    )
+    .await;
+    wait_for(&controller, "prepare", |p| p.pending_prepare.is_some()).await;
+    let prepare = controller.panel().pending_prepare.unwrap();
+    assert_eq!((prepare.play_option, prepare.random_seed), (103, Some(42)));
+    assert_eq!(prepare.ruleset_profile, "lr2");
+
+    controller.handle().prepare_taken("m1".into());
+    wait_for(&controller, "prepare taken", |p| p.pending_prepare.is_none()).await;
+    controller.handle().play_loaded("m1".into(), md5.into(), 910);
+    let ready = recv_kind(&mut server, "play_ready").await;
+    assert_eq!(
+        ready,
+        json!({"type":"play_ready","match_id":"m1","chart_hash":md5,"ln_mode":"LN",
+               "totalnotes":910})
+    );
+
+    let start_at = now_unix() + 5.0;
+    reply(&mut server, json!({"type":"start","match_id":"m1","start_at":start_at,"ln_mode":"LN"}))
+        .await;
+    wait_for(&controller, "start gate", |p| p.start_gate.is_some()).await;
+    assert_eq!(controller.panel().start_gate.unwrap().start_at, start_at);
+    controller.shutdown();
+}

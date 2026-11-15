@@ -67,6 +67,30 @@ impl ArenaHandle {
         self.send(Command::Session(Event::RoomJoin { code, password }));
     }
 
+    /// The `play_option` of the player's current options (for the option phase).
+    pub fn set_option_choice(&self, play_option: u32) {
+        self.send(Command::Session(Event::SetOptionChoice(play_option)));
+    }
+
+    /// READY in the option phase (`option_ready`).
+    pub fn option_ready(&self) {
+        self.send(Command::Session(Event::OptionReadyNow));
+    }
+
+    pub fn prepare_taken(&self, match_id: String) {
+        self.send(Command::Session(Event::PrepareTaken { match_id }));
+    }
+
+    /// The chart is loaded and waits for READY (`play_ready`).
+    pub fn play_loaded(&self, match_id: String, md5: String, totalnotes: u32) {
+        self.send(Command::Session(Event::PlayLoaded { match_id, md5, totalnotes }));
+    }
+
+    /// The chart could not be started: leave the match (`forfeit`).
+    pub fn load_failed(&self, match_id: String) {
+        self.send(Command::Session(Event::LoadFailed { match_id }));
+    }
+
     /// Leave the room (`queue_cancel`).
     pub fn leave_room(&self) {
         self.send(Command::Session(Event::RoomLeave));

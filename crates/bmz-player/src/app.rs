@@ -198,6 +198,7 @@ use bmz_render::skin::{
 };
 
 mod app_support;
+mod arena_flow;
 mod background_jobs;
 mod bga_runtime;
 mod chart_assets;

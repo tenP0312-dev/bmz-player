@@ -6,9 +6,9 @@ use crate::arena::protocol::{
     PROTOCOL_VERSION, RoomStatusInfo, RulesetProfile, passmd5,
 };
 
-const MD5: &str = "0123456789abcdef0123456789abcdef";
+pub(super) const MD5: &str = "0123456789abcdef0123456789abcdef";
 
-fn hello() -> Hello {
+pub(super) fn hello() -> Hello {
     Hello {
         protocol: PROTOCOL_VERSION,
         player_id: 7,
@@ -22,11 +22,11 @@ fn hello() -> Hello {
     }
 }
 
-fn at(secs: f64) -> Now {
+pub(super) fn at(secs: f64) -> Now {
     Now { mono: Duration::from_secs_f64(secs), unix: 1_000.0 + secs }
 }
 
-fn hello_ok(active_match_id: &str) -> ServerMessage {
+pub(super) fn hello_ok(active_match_id: &str) -> ServerMessage {
     ServerMessage::HelloOk(HelloOk {
         session_id: "s1".into(),
         server_protocol: Some(8),
@@ -36,14 +36,14 @@ fn hello_ok(active_match_id: &str) -> ServerMessage {
     })
 }
 
-fn connected() -> ArenaSession {
+pub(super) fn connected() -> ArenaSession {
     let mut session = ArenaSession::new(hello(), ScreenState::Select);
     session.handle(at(0.0), Event::SocketOpened);
     session.handle(at(0.0), Event::Message(hello_ok("")));
     session
 }
 
-fn sent(actions: &[Action]) -> Vec<ClientMessage> {
+pub(super) fn sent(actions: &[Action]) -> Vec<ClientMessage> {
     actions
         .iter()
         .filter_map(|action| match action {
@@ -53,15 +53,15 @@ fn sent(actions: &[Action]) -> Vec<ClientMessage> {
         .collect()
 }
 
-fn recv(session: &mut ArenaSession, message: ServerMessage) -> Vec<ClientMessage> {
+pub(super) fn recv(session: &mut ArenaSession, message: ServerMessage) -> Vec<ClientMessage> {
     sent(&session.handle(at(1.0), Event::Message(message)))
 }
 
-fn json(message: &ClientMessage) -> serde_json::Value {
+pub(super) fn json(message: &ClientMessage) -> serde_json::Value {
     serde_json::from_str(&message.to_json().unwrap()).unwrap()
 }
 
-fn reserved(id: &str) -> ServerMessage {
+pub(super) fn reserved(id: &str) -> ServerMessage {
     ServerMessage::MatchReserved(MatchReserved {
         match_id: id.into(),
         ruleset_profile: "oraja".into(),
@@ -71,7 +71,7 @@ fn reserved(id: &str) -> ServerMessage {
     })
 }
 
-fn chart(id: Option<&str>, md5: &str) -> ServerMessage {
+pub(super) fn chart(id: Option<&str>, md5: &str) -> ServerMessage {
     ServerMessage::Chart(ChartAnnounced {
         match_id: id.map(str::to_owned),
         md5: md5.into(),
@@ -79,7 +79,7 @@ fn chart(id: Option<&str>, md5: &str) -> ServerMessage {
     })
 }
 
-fn nomination_started(id: &str, deadline: Option<f64>) -> ServerMessage {
+pub(super) fn nomination_started(id: &str, deadline: Option<f64>) -> ServerMessage {
     ServerMessage::NominationStarted(NominationInfo {
         match_id: id.into(),
         deadline,
@@ -87,14 +87,14 @@ fn nomination_started(id: &str, deadline: Option<f64>) -> ServerMessage {
     })
 }
 
-fn room_status(code: &str) -> ServerMessage {
+pub(super) fn room_status(code: &str) -> ServerMessage {
     ServerMessage::RoomStatus(RoomStatusInfo {
         room_code: Some(code.into()),
         ..RoomStatusInfo::default()
     })
 }
 
-fn in_nomination(session: &mut ArenaSession, id: &str) {
+pub(super) fn in_nomination(session: &mut ArenaSession, id: &str) {
     session.handle(at(1.0), Event::RoomCreate);
     recv(session, reserved(id));
     recv(

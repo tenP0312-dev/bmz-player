@@ -36,6 +36,17 @@ pub struct ProfileConfig {
     pub select: SelectStateConfig,
     #[serde(default)]
     pub statistics: StatisticsConfig,
+    /// BMS-IR Arena connection (BMS-IR fork). Off by default.
+    #[serde(default)]
+    pub arena: ArenaConfig,
+}
+
+/// BMS-IR Arena settings. Holds no credentials: the BMS-IR login is reused.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArenaConfig {
+    /// Connect to BMS-IR Arena. Off by default; while off nothing is sent.
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]

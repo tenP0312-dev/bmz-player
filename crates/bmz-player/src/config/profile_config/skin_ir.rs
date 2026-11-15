@@ -640,6 +640,7 @@ impl ProfileConfig {
             skin: SkinConfig::default(),
             select: SelectStateConfig::default(),
             statistics: StatisticsConfig::default(),
+            arena: ArenaConfig::default(),
         }
     }
 }

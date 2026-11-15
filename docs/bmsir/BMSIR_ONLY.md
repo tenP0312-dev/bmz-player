@@ -13,6 +13,7 @@
 | カスタム IR provider | 設定 UI・`ir login` | 止める | 一覧は BMS-IR の 1 枠のみ。追加・種別選択の UI を外し、`ir login` は BMS-IR 以外を拒否（既定も `bms-ir`） |
 | 本家のリリース確認・更新ダウンロード（GitHub `hyrorre/bmz-player`） | `update.rs` | 止める | `ONLINE_UPDATES_ENABLED = false`。確認・ダウンロードの入口で終了。手動確認は「無効」と表示 |
 | Discord Rich Presence | `discord_presence.rs` | 止める | 曲名等を Discord へ公開するため。`DISCORD_PRESENCE_ENABLED = false` |
+| BMS-IR Arena（WebSocket） | `arena/` | 残す（既定OFF） | 接続先を BMS-IR のホストだけに制限（`ensure_arena_url_allowed`）。[BMS-IR Arena](ARENA.md) |
 | 難易度表の取得 | `difficulty_table.rs` | 残す | ユーザーが登録した公開 URL への GET のみ。プレイヤーデータを含まない |
 | 曲・差分ダウンロード | `song_download*` | 残す | ユーザー操作による公開 URL への GET のみ。プレイヤーデータを含まない |
 | OBS WebSocket | `obs*` | 残す | ユーザーが指定する OBS（通常は localhost）。外部サービスではない |

@@ -262,6 +262,7 @@ impl WinitApp {
         let mut session_options =
             play_session_options_from_start(&self.play_session_app_config(), options);
         session_options.play_config_key_mode = Some(play_config_key_mode);
+        session_options.ready_first_notes = self.boot.profile_config.play.ready_first_notes;
         session_options.ln_policy_setting = ln_policy_setting;
         session_options.rule_mode = rule_mode;
         let source = PlayPreloadSource::Import {

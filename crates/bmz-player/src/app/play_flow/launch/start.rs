@@ -342,6 +342,7 @@ impl WinitApp {
         let mut session_options =
             play_session_options_from_start(&self.play_session_app_config(), options.clone());
         session_options.play_config_key_mode = Some(play_config_key_mode);
+        session_options.ready_first_notes = self.boot.profile_config.play.ready_first_notes;
         // CLIの一時上書き中とコースのNoSpeed制約中は、profileの量を書き換えない。
         if self.boot.profile_config.cli_play.is_none()
             && session_options.speed_constraint != bmz_core::course::CourseSpeedConstraint::NoSpeed

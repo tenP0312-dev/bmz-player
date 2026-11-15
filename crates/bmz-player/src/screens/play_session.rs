@@ -122,6 +122,8 @@ pub struct PlaySessionOptions {
     /// Preload workers read archive chart assets into memory. Other callers import only the
     /// chart, so the window thread never decodes an archive.
     pub read_archive_assets: bool,
+    /// Profile option: show the first hit notes during READY (display only).
+    pub ready_first_notes: bool,
     /// Per-key presentation settings use the source chart mode. This differs
     /// from `chart.metadata.key_mode` after BATTLE expands 5K/7K to 10K/14K.
     pub play_config_key_mode: Option<KeyMode>,
@@ -414,6 +416,7 @@ impl Default for PlaySessionOptions {
     fn default() -> Self {
         Self {
             read_archive_assets: false,
+            ready_first_notes: false,
             play_config_key_mode: None,
             session_mode: SessionMode::Normal,
             autoplay: false,

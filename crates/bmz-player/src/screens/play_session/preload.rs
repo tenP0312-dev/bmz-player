@@ -291,10 +291,13 @@ pub fn preload_play_session_for_chart_with_callbacks(
         }
     }
     let chart = Arc::new(primary_chart);
+    let mut render_snapshot_cache =
+        crate::screens::play_snapshot::PlayRenderSnapshotCache::from_chart(&chart);
+    if options.ready_first_notes && !options.session_mode.is_practice() {
+        render_snapshot_cache.enable_ready_first_notes(&chart);
+    }
     let prepared_chart = PreparedPlayChart {
-        render_snapshot_cache: crate::screens::play_snapshot::PlayRenderSnapshotCache::from_chart(
-            &chart,
-        ),
+        render_snapshot_cache,
         chart,
         skin_attempt,
         source_ln_profile: imported.source_ln_profile,

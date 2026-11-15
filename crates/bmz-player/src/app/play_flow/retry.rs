@@ -233,6 +233,7 @@ impl WinitApp {
             play_session_options_from_start(&self.play_session_app_config(), options);
         session_options.ln_policy_setting = self.boot.profile_config.play.ln_mode_policy;
         session_options.rule_mode = self.boot.profile_config.play.rule_mode;
+        session_options.ready_first_notes = self.boot.profile_config.play.ready_first_notes;
         self.spawn_play_preload(chart_id, session_options, source);
     }
 

@@ -204,5 +204,7 @@ mod input_offset;
 mod missed_notes;
 #[path = "tests/performance.rs"]
 mod performance;
+#[path = "tests/ready_first_notes.rs"]
+mod ready_first_notes;
 #[path = "tests/scroll_bounds.rs"]
 mod scroll_bounds;

@@ -15,6 +15,7 @@ pub(super) struct SelectListRequest {
     pub mode: SelectModeFilter,
     pub difficulty: SelectDifficultyFilter,
     pub sort: SelectSort,
+    pub settings_extras: crate::screens::settings_model::SettingsFolderExtras,
 }
 
 pub(super) struct LoadedSelectList {
@@ -191,6 +192,7 @@ fn load(request: &SelectListRequest) -> Result<LoadedSelectList> {
         library_db: &library_db,
         score_db: &score_db,
         collection_db: &collection_db,
+        settings_extras: &request.settings_extras,
     };
     let virtual_folders = VirtualFolderCatalog::load(&request.profile_paths.root_dir)
         .map_err(|error| format!("{error:#}"));
@@ -282,6 +284,7 @@ mod tests {
             mode: SelectModeFilter::All,
             difficulty: SelectDifficultyFilter::All,
             sort: SelectSort::Title,
+            settings_extras: Default::default(),
         }
     }
 

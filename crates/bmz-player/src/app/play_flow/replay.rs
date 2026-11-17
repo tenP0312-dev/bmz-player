@@ -333,7 +333,9 @@ impl WinitApp {
             | SelectItem::SettingsBack
             | SelectItem::SettingsClose
             | SelectItem::AdvancedSettings
-            | SelectItem::ApplyAudioSettings => None,
+            | SelectItem::ApplyAudioSettings
+            | SelectItem::SettingsChoice(_)
+            | SelectItem::SettingsAction(_) => None,
         }
     }
 
@@ -349,7 +351,9 @@ impl WinitApp {
             | SelectItem::SettingsBack
             | SelectItem::SettingsClose
             | SelectItem::AdvancedSettings
-            | SelectItem::ApplyAudioSettings => None,
+            | SelectItem::ApplyAudioSettings
+            | SelectItem::SettingsChoice(_)
+            | SelectItem::SettingsAction(_) => None,
         }
     }
 

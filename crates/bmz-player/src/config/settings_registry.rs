@@ -8,10 +8,11 @@ use super::profile_config::{
     DifficultyTableLevelDisplay, DoubleOptionConfig, FLOATING_HISPEED_STEP_MIN,
     FLOATING_HISPEED_STEP_UNIT, FastSlowDisplayScope, GaugeAutoShiftConfig, GaugeTypeConfig,
     HISPEED_STEP_MAX, HISPEED_TRANSITION_MS_MAX, HispeedConfigPreset, HispeedDirectionConfig,
-    HsFixConfig, JudgeAlgorithmConfig, KeyModeConversionConfig, LaneConfig, ProfileConfig,
-    RELEASE_BOUNCE_MS_MAX, RandomOptionConfig, ReplaySlotRule, SRandomCorrectionConfig,
-    SelectInputModeConfig, SevenToNinePattern, SevenToNineRuleMode, SevenToNineType,
-    TargetOptionConfig, normalize_classic_hispeed_step, normalize_floating_hispeed_step,
+    HsFixConfig, IrSendPolicyConfig, JudgeAlgorithmConfig, KeyModeConversionConfig, LaneConfig,
+    ProfileConfig, RELEASE_BOUNCE_MS_MAX, RandomOptionConfig, ReplaySlotRule,
+    SRandomCorrectionConfig, SelectInputModeConfig, SevenToNinePattern, SevenToNineRuleMode,
+    SevenToNineType, TargetOptionConfig, normalize_classic_hispeed_step,
+    normalize_floating_hispeed_step,
 };
 use bmz_core::lane::KeyMode;
 use bmz_gameplay::rule::RuleMode;
@@ -30,6 +31,9 @@ impl SettingsEntryId {
         Self::PreviewVolume,
         Self::SystemBgmVolume,
         Self::SystemSeVolume,
+        Self::AutoKeysound,
+        Self::AutoKeysoundFallback,
+        Self::AutoKeysoundMine,
     ];
 
     pub const JUDGE_ENTRIES: &'static [Self] = &[
@@ -191,7 +195,10 @@ impl SettingsEntryId {
         Self::ReplaySlot4Rule,
     ];
 
-    pub const UI_ENTRIES: &'static [Self] = &[Self::Language, Self::ShowFps];
+    pub const UI_ENTRIES: &'static [Self] = &[Self::Language, Self::ShowFps, Self::UiScale];
+
+    pub const IR_ENTRIES: &'static [Self] =
+        &[Self::IrSendPolicy, Self::IrPrefetchGlobalRanking, Self::IrPrefetchRivalRanking];
 
     pub fn is_play_setting(self) -> bool {
         Self::PLAY_ENTRIES.contains(&self)
@@ -330,6 +337,13 @@ impl SettingsEntryId {
             Self::ReplaySlot4Rule => "REPLAY 4",
             Self::Language => "LANGUAGE",
             Self::ShowFps => "SHOW FPS",
+            Self::UiScale => "UI SCALE",
+            Self::AutoKeysound => "AUTO KEYSOUND",
+            Self::AutoKeysoundFallback => "AUTO KEYSOUND EMPTY POOR",
+            Self::AutoKeysoundMine => "AUTO KEYSOUND MINE",
+            Self::IrPrefetchGlobalRanking => "IR GLOBAL RANKING",
+            Self::IrPrefetchRivalRanking => "IR RIVAL RANKING",
+            Self::IrSendPolicy => "IR SEND POLICY",
         }
     }
 
@@ -474,6 +488,13 @@ impl SettingsEntryId {
             | Self::ReplaySlot4Rule => "settings-entry-description-replay-slot-rule",
             Self::Language => "settings-entry-description-language",
             Self::ShowFps => "settings-entry-description-show-fps",
+            Self::UiScale => "settings-entry-description-ui-scale",
+            Self::AutoKeysound => "settings-entry-description-auto-keysound",
+            Self::AutoKeysoundFallback => "settings-entry-description-auto-keysound-fallback",
+            Self::AutoKeysoundMine => "settings-entry-description-auto-keysound-mine",
+            Self::IrPrefetchGlobalRanking => "settings-entry-description-ir-prefetch-global",
+            Self::IrPrefetchRivalRanking => "settings-entry-description-ir-prefetch-rival",
+            Self::IrSendPolicy => "settings-entry-description-ir-send-policy",
         }
     }
 }
@@ -1001,5 +1022,40 @@ mod tests {
 
         assert!(adjust_settings_value(&mut profile, SettingsEntryId::Hispeed8Key1, -1));
         assert!(profile.input.play[KeyMode::K8.play_map_key()].hispeed.is_empty());
+    }
+
+    #[test]
+    fn ui_scale_cycles_through_the_menu_choices() {
+        let mut profile = ProfileConfig::new_default("default", "Default", 0);
+        profile.ui.scale_percent = 200;
+        assert!(adjust_settings_value(&mut profile, SettingsEntryId::UiScale, 1));
+        assert_eq!(profile.ui.scale_percent, 100);
+        assert!(adjust_settings_value(&mut profile, SettingsEntryId::UiScale, -1));
+        assert_eq!(profile.ui.scale_percent, 200);
+        profile.ui.scale_percent = 110;
+        assert!(adjust_settings_value(&mut profile, SettingsEntryId::UiScale, 1));
+        assert_eq!(profile.ui.scale_percent, 125);
+        profile.ui.scale_percent = 110;
+        assert!(adjust_settings_value(&mut profile, SettingsEntryId::UiScale, -1));
+        assert_eq!(profile.ui.scale_percent, 100);
+        assert_eq!(format_settings_value(&profile, SettingsEntryId::UiScale), "100%");
+    }
+
+    #[test]
+    fn ir_send_policy_edits_the_first_provider_only_when_one_exists() {
+        let mut profile = ProfileConfig::new_default("default", "Default", 0);
+        profile.ir.providers.clear();
+        assert!(!adjust_settings_value(&mut profile, SettingsEntryId::IrSendPolicy, 1));
+        assert_eq!(format_settings_value(&profile, SettingsEntryId::IrSendPolicy), "-");
+
+        profile.ir.providers.push(crate::config::profile_config::IrProviderConfig::bms_ir());
+        profile.ir.providers[0].send_policy = IrSendPolicyConfig::Always;
+        assert!(adjust_settings_value(&mut profile, SettingsEntryId::IrSendPolicy, 1));
+        assert_eq!(profile.ir.providers[0].send_policy, IrSendPolicyConfig::CompleteSong);
+        assert_eq!(format_settings_value(&profile, SettingsEntryId::IrSendPolicy), "COMPLETE SONG");
+        let snapshot = SettingsEntryId::IrSendPolicy.capture(&profile);
+        adjust_settings_value(&mut profile, SettingsEntryId::IrSendPolicy, 1);
+        snapshot.restore(&mut profile);
+        assert_eq!(profile.ir.providers[0].send_policy, IrSendPolicyConfig::CompleteSong);
     }
 }

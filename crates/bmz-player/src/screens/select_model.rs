@@ -416,6 +416,10 @@ pub enum SelectItem {
     AdvancedSettings,
     /// 保存済みの音声設定で出力を開き直すアクション行。
     ApplyAudioSettings,
+    /// 一覧から値を選ぶ設定行（プロファイル、スキン、曲フォルダなど）。
+    SettingsChoice(crate::screens::settings_model::SettingsChoiceRow),
+    /// 決定で操作を実行する設定行（再スキャン、割り当ての入れ替えなど）。
+    SettingsAction(crate::screens::settings_model::SettingsActionRow),
 }
 
 impl SelectItem {
@@ -436,6 +440,8 @@ impl SelectItem {
             Self::SettingsClose => Localizer::new(locale).text("select-close"),
             Self::AdvancedSettings => Localizer::new(locale).text("select-advanced-settings"),
             Self::ApplyAudioSettings => Localizer::new(locale).text("settings-audio-apply"),
+            Self::SettingsChoice(row) => row.label.clone(),
+            Self::SettingsAction(row) => row.label.clone(),
         }
     }
 }

@@ -137,6 +137,8 @@ pub(in crate::app) enum SelectItemKey {
     SettingsClose,
     AdvancedSettings,
     ApplyAudioSettings,
+    SettingsChoice(crate::screens::settings_model::SettingsChoiceTarget),
+    SettingsAction(crate::screens::settings_model::SettingsActionKind),
 }
 
 pub(in crate::app) fn select_item_key(item: &SelectItem) -> SelectItemKey {
@@ -165,6 +167,8 @@ pub(in crate::app) fn select_item_key(item: &SelectItem) -> SelectItemKey {
         SelectItem::SettingsClose => SelectItemKey::SettingsClose,
         SelectItem::AdvancedSettings => SelectItemKey::AdvancedSettings,
         SelectItem::ApplyAudioSettings => SelectItemKey::ApplyAudioSettings,
+        SelectItem::SettingsChoice(row) => SelectItemKey::SettingsChoice(row.target),
+        SelectItem::SettingsAction(row) => SelectItemKey::SettingsAction(row.kind),
     }
 }
 

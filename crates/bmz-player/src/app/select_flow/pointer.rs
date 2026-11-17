@@ -460,6 +460,9 @@ impl WinitApp {
                 self.select.select_items.get(row_index as usize).and_then(|item| match item {
                     SelectItem::Config(row) => Some((Some(row.entry_id), None)),
                     SelectItem::AppConfig(row) => Some((None, Some(row.entry_id))),
+                    SelectItem::SettingsChoice(_) | SelectItem::SettingsAction(_) => {
+                        Some((None, None))
+                    }
                     _ => None,
                 });
             if let Some((profile_entry, app_entry)) = selected_setting {
@@ -483,6 +486,8 @@ impl WinitApp {
                     self.begin_settings_edit(entry_id);
                 } else if let Some(entry_id) = app_entry {
                     self.begin_app_settings_edit(entry_id);
+                } else {
+                    self.activate_selected_settings_row();
                 }
                 return;
             }

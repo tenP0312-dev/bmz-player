@@ -523,3 +523,38 @@ pub(super) fn cycle_in_slice<T: Copy + PartialEq>(values: &[T], current: T, forw
         values[(index + values.len() - 1) % values.len()]
     }
 }
+
+pub(super) const UI_SCALE_PERCENTS: [u32; 5] = [100, 125, 150, 175, 200];
+
+pub(super) fn cycle_ui_scale(current: u32, forward: bool) -> u32 {
+    let values = &UI_SCALE_PERCENTS;
+    match values.iter().position(|value| *value == current) {
+        Some(_) => cycle_in_slice(values, current, forward),
+        // A value written by hand snaps to the nearest step in the moved direction.
+        None if forward => {
+            values.iter().copied().find(|value| *value > current).unwrap_or(values[0])
+        }
+        None => values.iter().rev().copied().find(|value| *value < current).unwrap_or(values[4]),
+    }
+}
+
+pub(super) fn cycle_ir_send_policy(
+    current: IrSendPolicyConfig,
+    forward: bool,
+) -> IrSendPolicyConfig {
+    const VALUES: [IrSendPolicyConfig; 3] = [
+        IrSendPolicyConfig::UpdateScore,
+        IrSendPolicyConfig::Always,
+        IrSendPolicyConfig::CompleteSong,
+    ];
+    cycle_in_slice(&VALUES, current, forward)
+}
+
+pub(super) fn format_ir_send_policy(value: IrSendPolicyConfig) -> String {
+    match value {
+        IrSendPolicyConfig::UpdateScore => "UPDATE SCORE",
+        IrSendPolicyConfig::Always => "ALWAYS",
+        IrSendPolicyConfig::CompleteSong => "COMPLETE SONG",
+    }
+    .to_string()
+}

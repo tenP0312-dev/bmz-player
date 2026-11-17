@@ -2,9 +2,12 @@ use std::collections::HashSet;
 
 use bmz_core::lane::KeyMode;
 
-use crate::config::app_config::{AppConfig, AudioConfig, VideoConfig};
+use crate::config::app_config::{
+    AppConfig, AudioConfig, ChartDownloadsConfig, GlobalInputConfig, LoggingConfig,
+    MusicSelectConfig, ScanConfig, ScreenshotConfig, VideoConfig,
+};
 use crate::config::app_settings_registry::{
-    AppSettingsChoices, AppSettingsEntryId, adjust_app_settings_value,
+    AppSettingsChoices, AppSettingsEntryId, AppSettingsSection, adjust_app_settings_value,
 };
 use crate::config::play_input::resolve_play_bindings;
 use crate::config::profile_config::{
@@ -221,9 +224,17 @@ pub struct SettingsEditSession {
 enum AppSettingsBaseline {
     Audio(AudioConfig),
     Video(VideoConfig),
+    Input(GlobalInputConfig),
+    Select(MusicSelectConfig),
+    Scan(ScanConfig),
+    TablesAutoFetch(bool),
+    Downloads(ChartDownloadsConfig),
+    Screenshot(ScreenshotConfig),
+    Logging(LoggingConfig),
 }
 
-/// `data/config.toml` の音声・映像設定を一項目ずつ編集するセッション。
+/// `data/config.toml` の設定を一項目ずつ編集するセッション。
+/// 取消では、編集した項目のセクションだけを戻す。
 #[derive(Debug, Clone)]
 pub struct AppSettingsEditSession {
     pub entry_id: AppSettingsEntryId,
@@ -237,10 +248,22 @@ impl AppSettingsEditSession {
         entry_id: AppSettingsEntryId,
         choices: AppSettingsChoices,
     ) -> Self {
-        let baseline = if entry_id.is_audio() {
-            AppSettingsBaseline::Audio(config.audio.clone())
-        } else {
-            AppSettingsBaseline::Video(config.video.clone())
+        let baseline = match entry_id.section() {
+            AppSettingsSection::Audio => AppSettingsBaseline::Audio(config.audio.clone()),
+            AppSettingsSection::Video => AppSettingsBaseline::Video(config.video.clone()),
+            AppSettingsSection::Input => AppSettingsBaseline::Input(config.input.clone()),
+            AppSettingsSection::Select => AppSettingsBaseline::Select(config.select.clone()),
+            AppSettingsSection::Scan => AppSettingsBaseline::Scan(config.scan.clone()),
+            AppSettingsSection::Tables => {
+                AppSettingsBaseline::TablesAutoFetch(config.tables.auto_fetch_on_startup)
+            }
+            AppSettingsSection::Downloads => {
+                AppSettingsBaseline::Downloads(config.downloads.clone())
+            }
+            AppSettingsSection::Screenshot => {
+                AppSettingsBaseline::Screenshot(config.screenshot.clone())
+            }
+            AppSettingsSection::Logging => AppSettingsBaseline::Logging(config.logging.clone()),
         };
         Self { entry_id, baseline, choices }
     }
@@ -249,6 +272,31 @@ impl AppSettingsEditSession {
         match &self.baseline {
             AppSettingsBaseline::Audio(value) => config.audio = value.clone(),
             AppSettingsBaseline::Video(value) => config.video = value.clone(),
+            AppSettingsBaseline::Input(value) => config.input = value.clone(),
+            AppSettingsBaseline::Select(value) => config.select = value.clone(),
+            AppSettingsBaseline::Scan(value) => config.scan = value.clone(),
+            AppSettingsBaseline::TablesAutoFetch(value) => {
+                config.tables.auto_fetch_on_startup = *value;
+            }
+            AppSettingsBaseline::Downloads(value) => config.downloads = value.clone(),
+            AppSettingsBaseline::Screenshot(value) => config.screenshot = value.clone(),
+            AppSettingsBaseline::Logging(value) => config.logging = value.clone(),
+        }
+    }
+
+    /// The input settings before this edit, to apply only a changed backend or device.
+    pub fn input_baseline(&self) -> Option<&GlobalInputConfig> {
+        match &self.baseline {
+            AppSettingsBaseline::Input(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// The select settings before this edit.
+    pub fn select_baseline(&self) -> Option<&MusicSelectConfig> {
+        match &self.baseline {
+            AppSettingsBaseline::Select(value) => Some(value),
+            _ => None,
         }
     }
 
@@ -262,6 +310,41 @@ impl AppSettingsEditSession {
 pub enum SelectSettingsEditSession {
     Profile(SettingsEditSession),
     App(AppSettingsEditSession),
+    Choice(ChoiceEditSession),
+}
+
+/// A row whose values are listed when the folder is built (profiles, skins,
+/// song folders, ...). Editing only moves the draft; nothing is written until
+/// the edit is confirmed, so cancelling needs no restore.
+#[derive(Debug, Clone)]
+pub struct ChoiceEditSession {
+    /// Index of the edited row in the select list, to show the draft value.
+    pub item_index: usize,
+    pub row: crate::screens::settings_model::SettingsChoiceRow,
+    original: usize,
+}
+
+impl ChoiceEditSession {
+    pub fn begin(
+        item_index: usize,
+        row: crate::screens::settings_model::SettingsChoiceRow,
+    ) -> Self {
+        let original = row.current;
+        Self { item_index, row, original }
+    }
+
+    pub fn adjust(&mut self, direction: i32) -> bool {
+        self.row.step(direction)
+    }
+
+    /// The confirmed choice, or `None` when the value did not change.
+    pub fn changed_choice(&self) -> Option<&crate::screens::settings_model::SettingsChoice> {
+        (self.row.current != self.original).then(|| self.row.choices.get(self.row.current))?
+    }
+
+    pub fn original(&self) -> usize {
+        self.original
+    }
 }
 
 impl SettingsEditSession {
@@ -561,6 +644,88 @@ mod tests {
             assert_eq!(profile.select.random_select_flags(), expected);
             session.restore(&mut profile);
             assert_eq!(profile.select.random_select_flags(), [false; 8]);
+        }
+    }
+
+    #[test]
+    fn choice_edit_reports_a_change_only_when_the_value_moved() {
+        use crate::screens::settings_model::{
+            SettingsChoice, SettingsChoiceRow, SettingsChoiceTarget,
+        };
+        let row = SettingsChoiceRow {
+            target: SettingsChoiceTarget::TableEnabled(0),
+            label: "Table".into(),
+            description: String::new(),
+            choices: vec![SettingsChoice::new("off", "OFF"), SettingsChoice::new("on", "ON")],
+            current: 1,
+        };
+        let mut session = ChoiceEditSession::begin(3, row);
+        assert_eq!(session.item_index, 3);
+        assert!(session.changed_choice().is_none());
+        assert!(session.adjust(1));
+        assert_eq!(session.changed_choice().map(|choice| choice.key.as_str()), Some("off"));
+        assert!(session.adjust(-1));
+        assert!(session.changed_choice().is_none());
+        assert_eq!(session.original(), 1);
+    }
+
+    #[test]
+    fn app_edit_session_restores_only_the_new_sections() {
+        let mut config = AppConfig::default();
+        let input = AppSettingsEditSession::capture(
+            &config,
+            AppSettingsEntryId::InputKeyboardEnabled,
+            AppSettingsChoices::None,
+        );
+        assert!(input.adjust(&mut config, 1));
+        config.downloads.http_parallelism = 5;
+        input.restore(&mut config);
+        assert!(config.input.keyboard_enabled);
+        assert_eq!(config.downloads.http_parallelism, 5, "other sections stay");
+        assert!(input.input_baseline().is_some());
+        assert!(input.select_baseline().is_none());
+
+        let downloads = AppSettingsEditSession::capture(
+            &config,
+            AppSettingsEntryId::DownloadsHttpParallelism,
+            AppSettingsChoices::None,
+        );
+        assert!(downloads.adjust(&mut config, -1));
+        downloads.restore(&mut config);
+        assert_eq!(config.downloads.http_parallelism, 5);
+
+        let tables = AppSettingsEditSession::capture(
+            &config,
+            AppSettingsEntryId::TablesFetchOnStartup,
+            AppSettingsChoices::None,
+        );
+        let before = config.tables.auto_fetch_on_startup;
+        let source_count = config.tables.sources.len();
+        assert!(tables.adjust(&mut config, 1));
+        config.tables.sources.push(crate::config::app_config::DifficultyTableSource {
+            url: "https://example.com/".into(),
+            enabled: true,
+        });
+        tables.restore(&mut config);
+        assert_eq!(config.tables.auto_fetch_on_startup, before);
+        assert_eq!(config.tables.sources.len(), source_count + 1, "table list edits are kept");
+
+        for entry_id in [
+            AppSettingsEntryId::SelectExperimentalDetailOptions,
+            AppSettingsEntryId::ScanFollowSymlinks,
+            AppSettingsEntryId::ScreenshotCopyToClipboard,
+            AppSettingsEntryId::LoggingLevel,
+        ] {
+            let original = config.clone();
+            let session =
+                AppSettingsEditSession::capture(&config, entry_id, AppSettingsChoices::None);
+            assert!(session.adjust(&mut config, 1), "{entry_id:?}");
+            session.restore(&mut config);
+            assert_eq!(
+                toml::to_string(&config).unwrap(),
+                toml::to_string(&original).unwrap(),
+                "{entry_id:?}"
+            );
         }
     }
 }

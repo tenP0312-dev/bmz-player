@@ -28,8 +28,10 @@ impl WinitApp {
             self.select.list_loader.defer(action);
             return true;
         }
+        let settings_extras = self.settings_folder_extras(&action);
         self.select.list_loader.request(super::super::select_list_loader::SelectListRequest {
             action,
+            settings_extras,
             app_config: self.boot.app_config.clone(),
             profile_config: self.boot.profile_config.clone(),
             library_path: self.boot.app_paths.library_db.clone(),

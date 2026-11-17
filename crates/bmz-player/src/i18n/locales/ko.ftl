@@ -1031,3 +1031,23 @@ downloads-state-validating = 압축 파일 확인 중
 skin-external-allow = 외부 스킨 허용
 skin-external-revoke = 외부 스킨 권한 해제
 skin-external-allow-help = 선택한 스킨과 실제 파일이 있는 폴더의 읽기를 허용합니다. 공유 폴더는 프로필 설정에서 추가할 수 있습니다.
+
+# 화면 키보드 (컨트롤러로 문자 입력)
+soft-keyboard-mode-hiragana = 히라가나
+soft-keyboard-mode-katakana = 가타카나
+soft-keyboard-mode-alpha-lower = abc
+soft-keyboard-mode-alpha-upper = ABC
+soft-keyboard-mode-symbol = 기호
+soft-keyboard-mode-wide-symbol = 전각 기호
+soft-keyboard-space = 공백
+soft-keyboard-wide-space = 전각 공백
+soft-keyboard-count = { $count }자
+soft-keyboard-count-max = { $count } / { $max }자
+soft-keyboard-notice-max-length = 더 이상 입력할 수 없습니다
+soft-keyboard-notice-not-allowed = 이 칸에서는 사용할 수 없는 문자입니다
+soft-keyboard-notice-cancel-armed = 한 번 더 누르면 입력을 버리고 닫습니다
+soft-keyboard-help-scratch = 스크래치: 커서 좌우   KEY2 / KEY4: 커서 상하
+soft-keyboard-help-keys = KEY1: 입력   KEY3: 탁음·작은 글자·대소문자   KEY5: 한 글자 삭제   KEY6: 문자 종류   KEY7: 확정
+soft-keyboard-help-buttons = E1: 공백 (누르고 있으면 추가 조작)   E3: 이전 문자 종류   E2 / E4: 취소
+soft-keyboard-help-e1-scratch = E1을 누르는 동안   스크래치: 캐럿 좌우
+soft-keyboard-help-e1-keys = KEY5: 모두 지우기   KEY6: 이전 문자 종류

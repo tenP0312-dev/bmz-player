@@ -1031,3 +1031,23 @@ downloads-state-validating = 正在检查压缩包
 skin-external-allow = 允许此外部皮肤
 skin-external-revoke = 撤销外部皮肤权限
 skin-external-allow-help = 允许此皮肤读取其实际所在的文件夹。可在配置文件中添加共享资源文件夹。
+
+# 屏幕键盘（用控制器输入文字）
+soft-keyboard-mode-hiragana = 平假名
+soft-keyboard-mode-katakana = 片假名
+soft-keyboard-mode-alpha-lower = abc
+soft-keyboard-mode-alpha-upper = ABC
+soft-keyboard-mode-symbol = 符号
+soft-keyboard-mode-wide-symbol = 全角符号
+soft-keyboard-space = 空格
+soft-keyboard-wide-space = 全角空格
+soft-keyboard-count = { $count } 个字符
+soft-keyboard-count-max = { $count } / { $max } 个字符
+soft-keyboard-notice-max-length = 无法再输入更多字符
+soft-keyboard-notice-not-allowed = 此栏不能使用该字符
+soft-keyboard-notice-cancel-armed = 再按一次将放弃输入并关闭
+soft-keyboard-help-scratch = 转盘：光标左右   KEY2 / KEY4：光标上下
+soft-keyboard-help-keys = KEY1：输入   KEY3：浊音・小写假名・大小写   KEY5：删除一个字符   KEY6：字符类型   KEY7：确定
+soft-keyboard-help-buttons = E1：空格（按住可进行更多操作）   E3：上一个字符类型   E2 / E4：取消
+soft-keyboard-help-e1-scratch = 按住 E1 时   转盘：插入点左右
+soft-keyboard-help-e1-keys = KEY5：全部清除   KEY6：上一个字符类型

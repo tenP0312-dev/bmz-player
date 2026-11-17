@@ -1037,3 +1037,23 @@ downloads-state-validating = Checking archive
 skin-external-allow = Allow external skin
 skin-external-revoke = Revoke external skin access
 skin-external-allow-help = Allow this skin to read its real containing folder. Additional shared folders can be specified in the profile settings.
+
+# Soft keyboard (text input with a controller)
+soft-keyboard-mode-hiragana = Hiragana
+soft-keyboard-mode-katakana = Katakana
+soft-keyboard-mode-alpha-lower = abc
+soft-keyboard-mode-alpha-upper = ABC
+soft-keyboard-mode-symbol = Symbols
+soft-keyboard-mode-wide-symbol = Full-width symbols
+soft-keyboard-space = SP
+soft-keyboard-wide-space = W-SP
+soft-keyboard-count = { $count } chars
+soft-keyboard-count-max = { $count } / { $max } chars
+soft-keyboard-notice-max-length = No more characters can be entered
+soft-keyboard-notice-not-allowed = This character cannot be used in this field
+soft-keyboard-notice-cancel-armed = Press again to discard the input and close
+soft-keyboard-help-scratch = Scratch: cursor left / right   KEY2 / KEY4: cursor up / down
+soft-keyboard-help-keys = KEY1: enter   KEY3: dakuten / small / case   KEY5: delete   KEY6: character set   KEY7: confirm
+soft-keyboard-help-buttons = E1: space (hold for more)   E3: previous character set   E2 / E4: cancel
+soft-keyboard-help-e1-scratch = While holding E1   Scratch: move caret left / right
+soft-keyboard-help-e1-keys = KEY5: clear all   KEY6: previous character set

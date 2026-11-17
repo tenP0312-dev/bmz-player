@@ -147,11 +147,16 @@ pub(in crate::app) fn reconcile_select_holds_from_pressed_controls(
     input: &mut AppInputRuntime,
     bindings: &SelectKeyBindings,
 ) {
-    let (start_held, select_held, e_action_holds) =
+    let (start_held, select_held, mut e_action_holds) =
         select_hold_state_from_pressed_controls(&input.pressed_controls, bindings);
+    // E4（システムボタン）を押している間は、E1〜E3の本来の意味を止める。
+    let system_button_held = input.system_button.held();
+    if system_button_held {
+        e_action_holds.retain(|action| *action == InputActionConfig::E4);
+    }
     input.select_e_action_holds = e_action_holds;
-    input.start_held = start_held;
-    input.select_held = select_held;
+    input.start_held = start_held && !system_button_held;
+    input.select_held = select_held && !system_button_held;
 }
 
 pub(in crate::app) fn skin_logical_input_snapshot_from_pressed_controls(

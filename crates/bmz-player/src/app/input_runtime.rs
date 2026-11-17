@@ -97,6 +97,8 @@ pub(super) struct AppInputRuntime {
     app_bounce_filter: InputBounceFilter,
     raw_bounce_filter: InputBounceFilter,
     discard_gamepad_output_until_resynced: bool,
+    /// プレイ以外の画面でのE4（システムボタン）の押下判定。
+    pub(super) system_button: super::quick_menu::SystemButtonLayer,
 }
 
 pub(super) struct InputReleaseBatch {
@@ -261,6 +263,7 @@ impl AppInputRuntime {
 
     pub(super) fn handle_focus_lost(&mut self) -> InputReleaseBatch {
         self.discard_gamepad_output_until_resynced = true;
+        self.system_button.reset();
         self.pressed_controls.clear();
         self.pressed_control_sources.clear();
         self.pressed_play_inputs.clear();

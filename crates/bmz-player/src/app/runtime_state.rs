@@ -398,6 +398,8 @@ pub(super) struct UiRuntimeState {
     pub(super) last_cursor_position: Option<PhysicalPosition<f64>>,
     /// 現在マウスカーソルが表示されているか。
     pub(super) cursor_visible: bool,
+    /// E4 短押しで開くクイックメニュー。
+    pub(super) quick_menu: super::quick_menu::QuickMenuRuntime,
 }
 
 #[derive(Clone)]

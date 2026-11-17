@@ -45,6 +45,7 @@ use crate::logging::{LogBuffer, LogEntry, LogLevel as TracingLogLevel};
 use crate::paths::AppPaths;
 use crate::practice_ui::{PracticePanelContext, build_practice_panel};
 use crate::profile_cmd;
+use crate::quick_menu_ui::build_quick_menu_panel;
 use crate::random_trainer::RandomTrainerState;
 use crate::screens::course_session::CourseResultSummary;
 use crate::screens::select_model::SelectCourseRow;

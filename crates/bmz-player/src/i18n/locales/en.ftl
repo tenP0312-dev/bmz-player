@@ -1037,3 +1037,15 @@ downloads-state-validating = Checking archive
 skin-external-allow = Allow external skin
 skin-external-revoke = Revoke external skin access
 skin-external-allow-help = Allow this skin to read its real containing folder. Additional shared folders can be specified in the profile settings.
+
+quick-menu-title = Quick menu
+quick-menu-hint = Turntable: select / Odd keys: run / Even keys, E2, E4: close
+quick-menu-select-first = Go to top
+quick-menu-select-last = Go to bottom
+quick-menu-key-config-clear = Clear binding
+quick-menu-key-config-restore-default = Restore default
+quick-menu-open-bmz-menu = Open BMZ Menu
+quick-menu-exit = Quit
+quick-menu-exit-title = Quit BMZ Player?
+quick-menu-exit-confirm = Quit
+quick-menu-exit-cancel = Cancel

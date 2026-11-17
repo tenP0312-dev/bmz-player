@@ -1032,3 +1032,15 @@ downloads-state-validating = 正在檢查壓縮檔
 skin-external-allow = 允許此外部佈景主題
 skin-external-revoke = 撤銷外部佈景主題權限
 skin-external-allow-help = 允許此佈景主題讀取其實際所在的資料夾。可在設定檔中新增共用資源資料夾。
+
+quick-menu-title = 快捷選單
+quick-menu-hint = 轉盤：選擇 / 奇數鍵：執行 / 偶數鍵、E2、E4：關閉
+quick-menu-select-first = 移到開頭
+quick-menu-select-last = 移到末尾
+quick-menu-key-config-clear = 解除指派
+quick-menu-key-config-restore-default = 恢復預設
+quick-menu-open-bmz-menu = 開啟 BMZ 選單
+quick-menu-exit = 結束
+quick-menu-exit-title = 要結束 BMZ Player 嗎？
+quick-menu-exit-confirm = 結束
+quick-menu-exit-cancel = 取消

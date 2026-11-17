@@ -250,6 +250,7 @@ mod play_support;
 mod play_transition_state;
 mod presentation;
 mod profile_switch;
+mod quick_menu;
 #[path = "app/result_flow/ending.rs"]
 mod result_flow_ending;
 #[path = "app/result_flow/favorites.rs"]

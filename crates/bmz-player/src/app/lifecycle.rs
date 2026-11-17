@@ -148,6 +148,15 @@ impl ApplicationHandler<AppUserEvent> for WinitApp {
                     self.update_select_option_panel();
                     return;
                 }
+                // コントローラーで開いたクイックメニューも ESC で閉じられるようにする。
+                if event.physical_key == PhysicalKey::Code(KeyCode::Escape)
+                    && event.state == ElementState::Pressed
+                    && !event.repeat
+                    && self.ui.quick_menu.is_open()
+                {
+                    self.close_quick_menu(true);
+                    return;
+                }
                 // ESC は BMZ メニュー (とメニュー内ポップアップ) を閉じる操作を、
                 // フォルダを閉じる・長押し終了より優先する。
                 // プレイ中は ESC がプレイ中断なので、メニュー表示中もプレイ側へ渡す。
@@ -497,7 +506,9 @@ impl ApplicationHandler<AppUserEvent> for WinitApp {
                     );
                 }
                 if self.should_exit_via_select_hold() {
-                    tracing::info!("escape held for 2s on select screen; exiting app");
+                    tracing::info!(
+                        "select exit requested (Escape hold or quick menu); exiting app"
+                    );
                     self.save_configs_for_exit(self.active_hispeed(), "select exit hold");
                     event_loop.exit();
                     return;

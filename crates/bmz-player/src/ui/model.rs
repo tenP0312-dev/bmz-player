@@ -275,6 +275,8 @@ pub struct EguiRunContext<'a, 'practice> {
     pub course_editor: &'a CourseEditorData,
     pub select_course_builder: Option<SelectCourseBuilderData<'a>>,
     pub practice: Option<&'a mut PracticePanelContext<'practice>>,
+    /// E4 短押しで開くクイックメニュー。操作はアプリ側が行い、ここでは表示だけ。
+    pub quick_menu: Option<&'a crate::quick_menu_ui::QuickMenuPanel>,
     pub result_ir: Option<&'a mut crate::screens::result_ir::ResultIrState>,
     pub profile_root: &'a Path,
     pub app_paths: &'a AppPaths,

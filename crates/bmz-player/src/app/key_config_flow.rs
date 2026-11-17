@@ -162,6 +162,48 @@ impl WinitApp {
         }
     }
 
+    /// 設定フォルダでカーソルが指すキーコンフィグの行。待ち受け中は `None`。
+    fn selected_key_binding_row(&self) -> Option<(bmz_core::lane::KeyMode, KeyBindingTarget)> {
+        if self.select.key_config_edit.is_some() || !in_settings_stack(&self.select.folder_stack) {
+            return None;
+        }
+        match self.select.select_items.get(self.select.selected_index) {
+            Some(SelectItem::KeyBinding(row)) => Some((row.key_mode, row.target)),
+            _ => None,
+        }
+    }
+
+    /// クイックメニューの「割り当て解除」。待ち受けを経ずに、選んでいる行の割り当てを外して保存する。
+    pub(super) fn clear_selected_key_binding(&mut self) {
+        let Some((key_mode, target)) = self.selected_key_binding_row() else {
+            return;
+        };
+        self.select.key_config_edit =
+            Some(KeyConfigEditSession::begin(key_mode, target, &self.boot.profile_config));
+        self.clear_key_config_binding();
+        // 失敗した場合も待ち受けを残さない。
+        self.cancel_key_config_edit();
+    }
+
+    /// クイックメニューの「既定に戻す」。選んでいる行だけを既定の割り当てへ戻して保存する。
+    pub(super) fn restore_selected_key_binding_default(&mut self) {
+        let Some((key_mode, target)) = self.selected_key_binding_row() else {
+            return;
+        };
+        self.select.key_config_edit =
+            Some(KeyConfigEditSession::begin(key_mode, target, &self.boot.profile_config));
+        if let Err(error) = crate::config::key_config::restore_play_binding_default(
+            &mut self.boot.profile_config.input,
+            key_mode,
+            target,
+        ) {
+            tracing::warn!(%error, ?key_mode, ?target, "failed to restore default key binding");
+            self.cancel_key_config_edit();
+            return;
+        }
+        self.commit_key_config_edit();
+    }
+
     pub(super) fn persist_key_config_edit_session(
         &mut self,
         session: &KeyConfigEditSession,

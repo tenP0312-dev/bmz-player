@@ -155,22 +155,7 @@ pub fn restore_action_group_defaults(
 ) {
     let defaults = crate::config::profile_config::default_ui_bindings();
     for &action in actions_for_group(group) {
-        let default_control = defaults.iter().find_map(|entry| {
-            if entry.action != Some(action) || !device_matches(&entry.device, slot.device()) {
-                return None;
-            }
-            match slot {
-                KeyBindingSlot::KeyboardPrimary => (entry.keyboard_slot.is_none()
-                    || entry.keyboard_slot == Some(KeyboardBindingSlotConfig::Primary))
-                .then(|| entry.control.clone()),
-                KeyBindingSlot::KeyboardSecondary => (entry.keyboard_slot
-                    == Some(KeyboardBindingSlotConfig::Secondary))
-                .then(|| entry.control.clone()),
-                KeyBindingSlot::Controller
-                | KeyBindingSlot::Controller1P
-                | KeyBindingSlot::Controller2P => Some(entry.control.clone()),
-            }
-        });
+        let default_control = default_action_control(&defaults, action, slot);
         let target = KeyBindingTarget::Action { action, slot };
         match default_control {
             Some(control) => apply_play_binding(input, KeyMode::K7, target, &control)
@@ -179,6 +164,53 @@ pub fn restore_action_group_defaults(
                 .expect("default action binding is valid"),
         }
     }
+}
+
+/// 1つのスロットだけを既定の割り当てへ戻す。既定で空のスロットは割り当てを外す。
+pub fn restore_play_binding_default(
+    input: &mut ProfileInputConfig,
+    key_mode: KeyMode,
+    target: KeyBindingTarget,
+) -> Result<(), crate::config::play_input::InheritError> {
+    let default_control = match target {
+        KeyBindingTarget::Action { action, slot } => default_action_control(
+            &crate::config::profile_config::default_ui_bindings(),
+            action,
+            slot,
+        ),
+        KeyBindingTarget::Key { .. } | KeyBindingTarget::Scratch { .. } => {
+            let default_input = crate::config::play_input::default_profile_input();
+            let defaults = resolve_play_bindings(&default_input, key_mode)?;
+            default_control_for_target(&defaults, target)
+        }
+    };
+    match default_control {
+        Some(control) => apply_play_binding(input, key_mode, target, &control),
+        None => clear_play_binding(input, key_mode, target),
+    }
+}
+
+fn default_action_control(
+    defaults: &[BindingConfigEntry],
+    action: InputActionConfig,
+    slot: KeyBindingSlot,
+) -> Option<String> {
+    defaults.iter().find_map(|entry| {
+        if entry.action != Some(action) || !device_matches(&entry.device, slot.device()) {
+            return None;
+        }
+        match slot {
+            KeyBindingSlot::KeyboardPrimary => (entry.keyboard_slot.is_none()
+                || entry.keyboard_slot == Some(KeyboardBindingSlotConfig::Primary))
+            .then(|| entry.control.clone()),
+            KeyBindingSlot::KeyboardSecondary => (entry.keyboard_slot
+                == Some(KeyboardBindingSlotConfig::Secondary))
+            .then(|| entry.control.clone()),
+            KeyBindingSlot::Controller
+            | KeyBindingSlot::Controller1P
+            | KeyBindingSlot::Controller2P => Some(entry.control.clone()),
+        }
+    })
 }
 
 /// 現在表示中のキーモードと入力スロットだけをデフォルトへ戻す。

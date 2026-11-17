@@ -1,7 +1,11 @@
 use super::*;
 
 impl WinitApp {
+    /// 選曲画面の終了経路。Escape の長押しと、クイックメニューの「終了」（確認済み）が使う。
     pub(super) fn should_exit_via_select_hold(&mut self) -> bool {
+        if std::mem::take(&mut self.ui.quick_menu.exit_requested) {
+            return true;
+        }
         let allowed = matches!(self.view_state(), AppViewState::Select)
             && self.select.select_option_panel == 0
             && self.input.pressed_controls.contains("Escape");

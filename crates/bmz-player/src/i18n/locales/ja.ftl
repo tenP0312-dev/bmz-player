@@ -1031,3 +1031,15 @@ downloads-state-validating = 書庫を確認中
 skin-external-allow = この外部スキンを許可
 skin-external-revoke = 外部スキンの許可を解除
 skin-external-allow-help = 選択したスキンと、その実体があるフォルダー内の参照を許可します。共有資源の範囲はプロファイル設定で追加できます。
+
+quick-menu-title = クイックメニュー
+quick-menu-hint = 皿で選択 / 奇数鍵で実行 / 偶数鍵・E2・E4で閉じる
+quick-menu-select-first = 先頭へ
+quick-menu-select-last = 末尾へ
+quick-menu-key-config-clear = 割り当て解除
+quick-menu-key-config-restore-default = 既定に戻す
+quick-menu-open-bmz-menu = BMZ メニューを開く
+quick-menu-exit = 終了
+quick-menu-exit-title = BMZ Playerを終了しますか？
+quick-menu-exit-confirm = 終了する
+quick-menu-exit-cancel = キャンセル

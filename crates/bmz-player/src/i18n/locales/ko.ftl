@@ -1031,3 +1031,15 @@ downloads-state-validating = 압축 파일 확인 중
 skin-external-allow = 외부 스킨 허용
 skin-external-revoke = 외부 스킨 권한 해제
 skin-external-allow-help = 선택한 스킨과 실제 파일이 있는 폴더의 읽기를 허용합니다. 공유 폴더는 프로필 설정에서 추가할 수 있습니다.
+
+quick-menu-title = 퀵 메뉴
+quick-menu-hint = 턴테이블: 선택 / 홀수 건반: 실행 / 짝수 건반·E2·E4: 닫기
+quick-menu-select-first = 맨 위로
+quick-menu-select-last = 맨 아래로
+quick-menu-key-config-clear = 할당 해제
+quick-menu-key-config-restore-default = 기본값으로 되돌리기
+quick-menu-open-bmz-menu = BMZ 메뉴 열기
+quick-menu-exit = 종료
+quick-menu-exit-title = BMZ Player를 종료할까요?
+quick-menu-exit-confirm = 종료
+quick-menu-exit-cancel = 취소

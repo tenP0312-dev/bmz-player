@@ -68,8 +68,12 @@ impl WinitApp {
                 self.apply_key_config_gamepad(&control);
                 continue;
             }
+            if self.route_system_axis_ticks(&tick.name, tick.ticks) {
+                continue;
+            }
             self.route_gamepad_axis_ticks(tick.device_id, &tick.name, tick.ticks);
         }
+        self.tick_system_button();
     }
 
     pub(super) fn route_gamepad_button_event(
@@ -88,6 +92,9 @@ impl WinitApp {
             return;
         }
         if self.viewer_waiting {
+            if self.route_system_button(&control_event) {
+                return;
+            }
             self.sync_viewer_wait_exit_holds();
             return;
         }
@@ -98,6 +105,7 @@ impl WinitApp {
             && self.ui.egui.as_ref().is_some_and(|ui| ui.blocks_game_input(false))
         {
             self.reset_detail_options_input();
+            self.reset_system_button();
             return;
         }
         let mut device_event = crate::input::gamepad::to_device_input_event(event);
@@ -108,6 +116,11 @@ impl WinitApp {
             device_event.bounce_policy = InputBouncePolicy::Bypass;
         }
         let device_event = self.filter_app_input_bounce(device_event);
+        // E4（システムボタン）はbounce filterの後、画面ごとの分岐より先に判定する。
+        // bounceとして捨てたPressはレイヤーにも渡さない。
+        if (device_event.is_some() || !event.pressed) && self.route_system_button(&control_event) {
+            return;
+        }
         if self.route_select_option_session_event(&control_event, device_event.is_some()) {
             return;
         }
@@ -152,6 +165,9 @@ impl WinitApp {
         pressed_buttons: &[crate::input::gamepad::GamepadPressedButton],
     ) {
         self.input.replace_gamepad_pressed_controls(pressed_buttons);
+        if self.input.system_button.held() && !self.system_button_physically_held() {
+            self.reset_system_button();
+        }
         self.sync_select_holds_from_pressed_controls();
         self.reconcile_select_option_session();
         self.sync_play_control_holds_from_pressed_controls();

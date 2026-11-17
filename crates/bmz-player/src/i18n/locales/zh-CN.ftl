@@ -1031,3 +1031,15 @@ downloads-state-validating = 正在检查压缩包
 skin-external-allow = 允许此外部皮肤
 skin-external-revoke = 撤销外部皮肤权限
 skin-external-allow-help = 允许此皮肤读取其实际所在的文件夹。可在配置文件中添加共享资源文件夹。
+
+quick-menu-title = 快捷菜单
+quick-menu-hint = 转盘：选择 / 奇数键：执行 / 偶数键、E2、E4：关闭
+quick-menu-select-first = 移到开头
+quick-menu-select-last = 移到末尾
+quick-menu-key-config-clear = 解除分配
+quick-menu-key-config-restore-default = 恢复默认
+quick-menu-open-bmz-menu = 打开 BMZ 菜单
+quick-menu-exit = 退出
+quick-menu-exit-title = 要退出 BMZ Player 吗？
+quick-menu-exit-confirm = 退出
+quick-menu-exit-cancel = 取消

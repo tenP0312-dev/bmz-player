@@ -526,6 +526,7 @@ impl WinitApp {
                 last_cursor_action_at: now,
                 last_cursor_position: None,
                 cursor_visible: true,
+                quick_menu: Default::default(),
             },
             course_editor_cache: course_editor::CourseEditorDataCache::default(),
             meta_animations: Default::default(),

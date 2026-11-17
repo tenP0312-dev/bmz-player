@@ -230,6 +230,7 @@ impl WinitApp {
         let practice_input_enabled = self.play.play_ending.is_none();
         let practice_default_position = self.renderer.play_skin_practice_position();
         let update_allowed = self.select_maintenance_allowed();
+        let quick_menu_panel = self.quick_menu_panel();
         let mut practice_panel_ctx = practice_panel_context(
             self.play.practice_session.as_mut(),
             practice_media_ready,
@@ -282,6 +283,7 @@ impl WinitApp {
                     }
                 }),
                 practice: practice_panel_ctx.as_mut(),
+                quick_menu: quick_menu_panel.as_ref(),
                 result_ir: result_ir_panel,
                 profile_root: &self.boot.profile_paths.root_dir,
                 app_paths: &self.boot.app_paths,
@@ -317,6 +319,7 @@ impl WinitApp {
         let scene_allows_idle = scene_kind != AppSceneKind::Play || self.play.play_ending.is_none();
         let select_course_builder = self.select.course_builder.is_some();
         let use_idle_frame = scene_allows_idle
+            && !self.ui.quick_menu.is_open()
             && self.ui.egui.as_ref().is_some_and(|egui| {
                 !egui.needs_full_frame(
                     scene,

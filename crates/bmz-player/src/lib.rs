@@ -37,6 +37,7 @@ mod directory_scan;
 pub mod discord_presence;
 #[cfg(unix)]
 mod external_process;
+pub mod fork_policy;
 pub mod gameplay_runtime;
 pub mod generated_preview;
 pub mod i18n;
@@ -53,6 +54,7 @@ pub mod paths;
 mod play_presentation;
 pub mod practice_ui;
 pub mod profile_cmd;
+pub mod quick_menu_ui;
 mod random_index;
 pub mod random_option_seed;
 pub mod random_trainer;

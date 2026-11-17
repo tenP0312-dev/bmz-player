@@ -899,3 +899,33 @@ fn controller_slot_for_lane_splits_double_play_sides() {
     assert_eq!(controller_slot_for_lane(KeyMode::K7, LaneConfig::Key1), KeyBindingSlot::Controller);
     assert_eq!(controller_slot_for_lane(KeyMode::K9, LaneConfig::Key8), KeyBindingSlot::Controller);
 }
+
+#[test]
+fn restore_play_binding_default_resets_only_selected_slot() {
+    let mut profile = ProfileConfig::new_default("default", "Default", 0);
+    let key1_pad = key_target(LaneConfig::Key1, KeyBindingSlot::Controller);
+    let key2_pad = key_target(LaneConfig::Key2, KeyBindingSlot::Controller);
+    apply_play_binding(&mut profile.input, KeyMode::K7, key1_pad, "Button20").unwrap();
+    apply_play_binding(&mut profile.input, KeyMode::K7, key2_pad, "Button21").unwrap();
+
+    restore_play_binding_default(&mut profile.input, KeyMode::K7, key1_pad).unwrap();
+
+    assert_eq!(format_play_binding(&profile, KeyMode::K7, key1_pad), "Button1");
+    assert_eq!(format_play_binding(&profile, KeyMode::K7, key2_pad), "Button21");
+}
+
+#[test]
+fn restore_play_binding_default_handles_actions_and_empty_defaults() {
+    let mut profile = ProfileConfig::new_default("default", "Default", 0);
+    let e4_pad = action_target(InputActionConfig::E4, KeyBindingSlot::Controller);
+    let e4_secondary = action_target(InputActionConfig::E4, KeyBindingSlot::KeyboardSecondary);
+    apply_play_binding(&mut profile.input, KeyMode::K7, e4_pad, "Button30").unwrap();
+    apply_play_binding(&mut profile.input, KeyMode::K7, e4_secondary, "T").unwrap();
+
+    restore_play_binding_default(&mut profile.input, KeyMode::K7, e4_pad).unwrap();
+    // 既定で空のスロットは割り当てを外す。
+    restore_play_binding_default(&mut profile.input, KeyMode::K7, e4_secondary).unwrap();
+
+    assert_eq!(format_play_binding(&profile, KeyMode::K7, e4_pad), "Button12");
+    assert_eq!(format_play_binding(&profile, KeyMode::K7, e4_secondary), "(none)");
+}

@@ -93,6 +93,25 @@ impl EguiLayer {
         action
     }
 
+    /// BMZ メニューを表示中か。
+    pub fn is_menu_visible(&self) -> bool {
+        self.visible
+    }
+
+    /// BMZ メニューを開く。表示中のページは維持する（クイックメニューから開く場合）。
+    pub fn open_menu(&mut self) {
+        if !self.visible {
+            self.toggle();
+        }
+    }
+
+    /// BMZ メニューを閉じる（コントローラーのE4短押し）。
+    pub fn close_menu(&mut self) {
+        if self.visible {
+            self.toggle();
+        }
+    }
+
     /// 選曲画面の「詳細設定」から BMZ メニューを開く。表示中のページは維持する。
     pub fn open_advanced_settings(&mut self) {
         self.visible = true;
@@ -270,6 +289,7 @@ impl EguiLayer {
             course_editor,
             mut select_course_builder,
             mut practice,
+            quick_menu,
             mut result_ir,
             profile_root,
             app_paths,
@@ -355,6 +375,9 @@ impl EguiLayer {
                 let panel = build_practice_panel(ui.ctx(), practice_ctx, text);
                 practice_start |= panel.start_play;
                 practice_leave |= panel.leave;
+            }
+            if let Some(panel) = quick_menu {
+                build_quick_menu_panel(ui.ctx(), panel);
             }
             if let Some(builder) = select_course_builder.as_mut() {
                 select_course_builder_action =

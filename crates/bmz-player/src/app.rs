@@ -292,6 +292,8 @@ mod select_flow_panel_session;
 mod select_flow_pointer;
 #[path = "app/select_flow/preview.rs"]
 mod select_flow_preview;
+#[path = "app/select_flow/settings_folder.rs"]
+mod select_flow_settings_folder;
 #[path = "app/select_flow/skin_events.rs"]
 mod select_flow_skin_events;
 #[path = "app/select_flow/snapshot.rs"]

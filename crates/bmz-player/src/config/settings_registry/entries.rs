@@ -1467,4 +1467,80 @@ define_settings! {
         },
         format: |profile| format_bool_on_off(profile.ui.show_fps),
     }
+    UiScale(u32) {
+        value: [field ui.scale_percent],
+        adjust: |profile, delta| {
+            let current = profile.ui.scale_percent;
+            let next = cycle_ui_scale(current, delta > 0);
+            profile.ui.scale_percent = next;
+            next != current
+        },
+        format: |profile| format!("{}%", profile.ui.scale_percent),
+    }
+    AutoKeysound(bool) {
+        value: [field audio_mix.auto_keysound],
+        adjust: |profile, _delta| {
+            profile.audio_mix.auto_keysound = !profile.audio_mix.auto_keysound;
+            true
+        },
+        format: |profile| format_bool_on_off(profile.audio_mix.auto_keysound),
+    }
+    AutoKeysoundFallback(bool) {
+        value: [field audio_mix.auto_keysound_fallback],
+        adjust: |profile, _delta| {
+            profile.audio_mix.auto_keysound_fallback = !profile.audio_mix.auto_keysound_fallback;
+            true
+        },
+        format: |profile| format_bool_on_off(profile.audio_mix.auto_keysound_fallback),
+    }
+    AutoKeysoundMine(bool) {
+        value: [field audio_mix.auto_keysound_mine],
+        adjust: |profile, _delta| {
+            profile.audio_mix.auto_keysound_mine = !profile.audio_mix.auto_keysound_mine;
+            true
+        },
+        format: |profile| format_bool_on_off(profile.audio_mix.auto_keysound_mine),
+    }
+    IrPrefetchGlobalRanking(bool) {
+        value: [field ir.prefetch_global_ranking_on_score_submit],
+        adjust: |profile, _delta| {
+            profile.ir.prefetch_global_ranking_on_score_submit =
+                !profile.ir.prefetch_global_ranking_on_score_submit;
+            true
+        },
+        format: |profile| format_bool_on_off(profile.ir.prefetch_global_ranking_on_score_submit),
+    }
+    IrPrefetchRivalRanking(bool) {
+        value: [field ir.prefetch_rival_ranking_on_score_submit],
+        adjust: |profile, _delta| {
+            profile.ir.prefetch_rival_ranking_on_score_submit =
+                !profile.ir.prefetch_rival_ranking_on_score_submit;
+            true
+        },
+        format: |profile| format_bool_on_off(profile.ir.prefetch_rival_ranking_on_score_submit),
+    }
+    // This fork has one IR provider (BMS-IR), so the folder edits the first one.
+    IrSendPolicy(Option<IrSendPolicyConfig>) {
+        value: [access |profile| profile.ir.providers.first().map(|provider| provider.send_policy),
+            |profile, value| {
+                if let (Some(provider), Some(value)) = (profile.ir.providers.first_mut(), value) {
+                    provider.send_policy = *value;
+                }
+            }],
+        adjust: |profile, delta| {
+            let Some(provider) = profile.ir.providers.first_mut() else {
+                return false;
+            };
+            cycle_enum(delta, provider.send_policy, cycle_ir_send_policy)
+                .map(|next| provider.send_policy = next)
+                .is_some()
+        },
+        format: |profile| {
+            profile
+                .ir
+                .providers
+                .first()
+                .map_or_else(|| "-".to_string(), |provider| format_ir_send_policy(provider.send_policy))
+        },
+    }
 }

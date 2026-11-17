@@ -177,6 +177,7 @@ send_policy = "always"
 role = "submit_only"
 ```
 
+- **BMS-IRフォークでは、providerはBMS-IRの1枠のみです**（[BMS-IR専用化](bmsir/BMSIR_ONLY.md)）。以下は本家の説明です。
 - 先頭の3枠は、BMZ IR / rianIR / BMS-IRの固定枠です。無効にしてもプロファイルに残し、BMZ メニューでは削除・種別の変更ができません。
 - 4枠目以降は、BMZ / rianIR互換のプロトコルを選ぶカスタムURL用です。プロトコルと`base_url`はログイン前に設定します。
 - 保存するのは、`provider`、`provider_key`、`base_url`、`enabled`、`account_display_name`、`account_id`、`send_policy`、`role`、`last_login_at`、`last_success_at`です。token・client secret・署名用の秘密鍵は保存しません。

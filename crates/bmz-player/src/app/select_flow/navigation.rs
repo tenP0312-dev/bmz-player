@@ -646,6 +646,13 @@ impl WinitApp {
                     self.apply_select_audio_settings();
                 }
             }
+            Some(SelectItem::SettingsChoice(_) | SelectItem::SettingsAction(_)) => {
+                if self.select.course_builder.is_some() {
+                    self.show_select_course_builder_chart_required();
+                } else {
+                    self.activate_selected_settings_row();
+                }
+            }
             None => {}
         }
     }

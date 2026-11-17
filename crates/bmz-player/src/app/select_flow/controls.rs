@@ -266,6 +266,12 @@ impl WinitApp {
                 names.dedup();
                 AppSettingsChoices::Text(names)
             }
+            AppSettingsEntryId::InputKeyboardBackend => AppSettingsChoices::KeyboardBackends(
+                crate::input::availability::BackendAvailability::current().keyboards().collect(),
+            ),
+            AppSettingsEntryId::InputGamepadBackend => AppSettingsChoices::GamepadBackends(
+                crate::input::availability::BackendAvailability::current().gamepads().collect(),
+            ),
             AppSettingsEntryId::VideoRenderer => {
                 let values = bmz_render::available_wgpu_backends()
                     .into_iter()
@@ -310,6 +316,7 @@ impl WinitApp {
                 session.restore(&mut self.boot.app_config);
                 tracing::info!(?entry_id, "app settings edit cancelled");
             }
+            SelectSettingsEditSession::Choice(session) => self.cancel_settings_choice_edit(session),
         }
         self.play_system_sound(crate::system_sound::SoundType::FolderClose);
     }
@@ -325,6 +332,7 @@ impl WinitApp {
             SelectSettingsEditSession::App(session) => {
                 self.commit_app_settings_edit(session);
             }
+            SelectSettingsEditSession::Choice(session) => self.commit_settings_choice_edit(session),
         }
     }
 
@@ -351,12 +359,7 @@ impl WinitApp {
         let entry_id = session.entry_id;
         match self.save_app_config_now() {
             Ok(()) => {
-                if !entry_id.is_audio() {
-                    let window = self.window.clone();
-                    if let Some(window) = window {
-                        self.apply_egui_video_config(&window);
-                    }
-                }
+                self.apply_committed_app_setting(&session);
                 self.reload_select_items();
                 self.play_system_sound(crate::system_sound::SoundType::OptionChange);
                 tracing::info!(?entry_id, "app settings edit saved");
@@ -491,6 +494,10 @@ impl WinitApp {
         let profile_entry = match session {
             SelectSettingsEditSession::Profile(session) => Some(session.entry_id()),
             SelectSettingsEditSession::App(_) => None,
+            SelectSettingsEditSession::Choice(_) => {
+                self.adjust_settings_choice_edit(direction);
+                return;
+            }
         };
         let before =
             profile_entry.map(|_| ProfileSettingsSnapshot::capture(&self.boot.profile_config));
@@ -503,6 +510,7 @@ impl WinitApp {
             SelectSettingsEditSession::App(session) => {
                 session.adjust(&mut self.boot.app_config, direction)
             }
+            SelectSettingsEditSession::Choice(_) => unreachable!("handled above"),
         };
         if !changed {
             return;
@@ -690,6 +698,10 @@ impl WinitApp {
                 }
                 Some(SelectItem::ApplyAudioSettings) => {
                     self.apply_select_audio_settings();
+                    true
+                }
+                Some(SelectItem::SettingsChoice(_) | SelectItem::SettingsAction(_)) => {
+                    self.activate_selected_settings_row();
                     true
                 }
                 _ => false,

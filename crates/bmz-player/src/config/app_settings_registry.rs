@@ -1,13 +1,14 @@
 use super::app_config::{
     AppConfig, AudioBackend, AudioBufferSizeMode, AudioOutputMode, AudioSampleRateMode,
-    FrameLatencyModeConfig, InternalResolutionModeConfig, RendererBackend, VsyncModeConfig,
-    WindowMode,
+    FrameLatencyModeConfig, GamepadBackendKind, InputBackendKind, InternalResolutionModeConfig,
+    LogLevel, RendererBackend, VsyncModeConfig, WindowMode,
 };
+use super::download_sources::HttpDownloadPreset;
 use crate::i18n::{AppLocale, Localizer};
 
 const AUDIO_SAMPLE_RATES: [u32; 5] = [44_100, 48_000, 96_000, 192_000, 384_000];
 
-/// 選曲画面から編集できる `data/config.toml` の音声・映像項目。
+/// 選曲画面から編集できる `data/config.toml` の項目。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AppSettingsEntryId {
     AudioBackend,
@@ -28,9 +29,104 @@ pub enum AppSettingsEntryId {
     VideoTargetFps,
     VideoBackgroundFps,
     VideoRenderer,
+    InputKeyboardBackend,
+    InputGamepadBackend,
+    InputKeyboardEnabled,
+    SelectExperimentalDetailOptions,
+    SelectScrollDurationLow,
+    SelectScrollDurationHigh,
+    ScanFollowSymlinks,
+    ScanOnStartup,
+    TablesFetchOnStartup,
+    DownloadsIpfsEnabled,
+    DownloadsHttpEnabled,
+    DownloadsHttpSource,
+    DownloadsHttpParallelism,
+    DownloadsHttpKeepArchive,
+    ScreenshotCopyToClipboard,
+    LoggingLevel,
+    LoggingFile,
+}
+
+/// The `config.toml` section an entry edits. Cancelling an edit restores only this section.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppSettingsSection {
+    Audio,
+    Video,
+    Input,
+    Select,
+    Scan,
+    Tables,
+    Downloads,
+    Screenshot,
+    Logging,
 }
 
 impl AppSettingsEntryId {
+    // Controller input ON / OFF is left to the BMZ menu: turning it off from a
+    // controller would leave a controller-only player without input.
+    pub const INPUT_ENTRIES: &'static [Self] =
+        &[Self::InputKeyboardBackend, Self::InputGamepadBackend, Self::InputKeyboardEnabled];
+
+    pub const SELECT_ENTRIES: &'static [Self] = &[
+        Self::SelectExperimentalDetailOptions,
+        Self::SelectScrollDurationLow,
+        Self::SelectScrollDurationHigh,
+    ];
+
+    pub const SCAN_ENTRIES: &'static [Self] = &[Self::ScanFollowSymlinks, Self::ScanOnStartup];
+
+    pub const TABLES_ENTRIES: &'static [Self] = &[Self::TablesFetchOnStartup];
+
+    pub const DOWNLOADS_ENTRIES: &'static [Self] = &[
+        Self::DownloadsIpfsEnabled,
+        Self::DownloadsHttpEnabled,
+        Self::DownloadsHttpSource,
+        Self::DownloadsHttpParallelism,
+        Self::DownloadsHttpKeepArchive,
+    ];
+
+    pub const SYSTEM_ENTRIES: &'static [Self] =
+        &[Self::ScreenshotCopyToClipboard, Self::LoggingLevel, Self::LoggingFile];
+
+    pub const fn section(self) -> AppSettingsSection {
+        match self {
+            Self::AudioBackend
+            | Self::AudioOutputMode
+            | Self::AudioSampleRate
+            | Self::AudioBufferMode
+            | Self::AudioBufferSize
+            | Self::AudioOutputDevice
+            | Self::AudioAsioDriver
+            | Self::AudioOutputChannelPair => AppSettingsSection::Audio,
+            Self::VideoWindowMode
+            | Self::VideoWidth
+            | Self::VideoHeight
+            | Self::VideoInternalResolution
+            | Self::VideoMonitor
+            | Self::VideoVsyncMode
+            | Self::VideoFrameLatencyMode
+            | Self::VideoTargetFps
+            | Self::VideoBackgroundFps
+            | Self::VideoRenderer => AppSettingsSection::Video,
+            Self::InputKeyboardBackend | Self::InputGamepadBackend | Self::InputKeyboardEnabled => {
+                AppSettingsSection::Input
+            }
+            Self::SelectExperimentalDetailOptions
+            | Self::SelectScrollDurationLow
+            | Self::SelectScrollDurationHigh => AppSettingsSection::Select,
+            Self::ScanFollowSymlinks | Self::ScanOnStartup => AppSettingsSection::Scan,
+            Self::TablesFetchOnStartup => AppSettingsSection::Tables,
+            Self::DownloadsIpfsEnabled
+            | Self::DownloadsHttpEnabled
+            | Self::DownloadsHttpSource
+            | Self::DownloadsHttpParallelism
+            | Self::DownloadsHttpKeepArchive => AppSettingsSection::Downloads,
+            Self::ScreenshotCopyToClipboard => AppSettingsSection::Screenshot,
+            Self::LoggingLevel | Self::LoggingFile => AppSettingsSection::Logging,
+        }
+    }
+
     pub const VIDEO_ENTRIES: &'static [Self] = &[
         Self::VideoWindowMode,
         Self::VideoWidth,
@@ -45,17 +141,7 @@ impl AppSettingsEntryId {
     ];
 
     pub const fn is_audio(self) -> bool {
-        matches!(
-            self,
-            Self::AudioBackend
-                | Self::AudioOutputMode
-                | Self::AudioSampleRate
-                | Self::AudioBufferMode
-                | Self::AudioBufferSize
-                | Self::AudioOutputDevice
-                | Self::AudioAsioDriver
-                | Self::AudioOutputChannelPair
-        )
+        matches!(self.section(), AppSettingsSection::Audio)
     }
 
     pub const fn label(self) -> &'static str {
@@ -78,6 +164,23 @@ impl AppSettingsEntryId {
             Self::VideoTargetFps => "TARGET FPS",
             Self::VideoBackgroundFps => "BACKGROUND FPS",
             Self::VideoRenderer => "RENDERER",
+            Self::InputKeyboardBackend => "KEYBOARD BACKEND",
+            Self::InputGamepadBackend => "CONTROLLER BACKEND",
+            Self::InputKeyboardEnabled => "KEYBOARD INPUT",
+            Self::SelectExperimentalDetailOptions => "DETAIL OPTIONS (EXPERIMENTAL)",
+            Self::SelectScrollDurationLow => "SCROLL FIRST",
+            Self::SelectScrollDurationHigh => "SCROLL REPEAT",
+            Self::ScanFollowSymlinks => "FOLLOW SYMLINKS",
+            Self::ScanOnStartup => "RESCAN ON STARTUP",
+            Self::TablesFetchOnStartup => "FETCH TABLES ON STARTUP",
+            Self::DownloadsIpfsEnabled => "IPFS DOWNLOAD",
+            Self::DownloadsHttpEnabled => "HTTP DOWNLOAD",
+            Self::DownloadsHttpSource => "HTTP SOURCE",
+            Self::DownloadsHttpParallelism => "HTTP PARALLEL",
+            Self::DownloadsHttpKeepArchive => "KEEP HTTP ARCHIVE",
+            Self::ScreenshotCopyToClipboard => "SCREENSHOT CLIPBOARD",
+            Self::LoggingLevel => "LOG LEVEL",
+            Self::LoggingFile => "LOG FILE",
         }
     }
 
@@ -100,6 +203,24 @@ impl AppSettingsEntryId {
             Self::VideoTargetFps => "settings-entry-description-video-target-fps",
             Self::VideoBackgroundFps => "settings-entry-description-video-background-fps",
             Self::VideoRenderer => "settings-entry-description-video-renderer",
+            Self::InputKeyboardBackend => "settings-entry-description-input-keyboard-backend",
+            Self::InputGamepadBackend => "settings-entry-description-input-gamepad-backend",
+            Self::InputKeyboardEnabled => "settings-entry-description-input-keyboard-enabled",
+            Self::SelectExperimentalDetailOptions => {
+                "settings-select-experimental-detail-options-help"
+            }
+            Self::SelectScrollDurationLow => "settings-entry-description-select-scroll-first",
+            Self::SelectScrollDurationHigh => "settings-entry-description-select-scroll-repeat",
+            Self::ScanFollowSymlinks => "settings-entry-description-scan-follow-symlinks",
+            Self::ScanOnStartup => "settings-entry-description-scan-on-startup",
+            Self::TablesFetchOnStartup => "settings-entry-description-tables-fetch-on-startup",
+            Self::DownloadsIpfsEnabled => "settings-entry-description-downloads-ipfs",
+            Self::DownloadsHttpEnabled => "settings-entry-description-downloads-http",
+            Self::DownloadsHttpSource => "settings-downloads-source-help",
+            Self::DownloadsHttpParallelism => "settings-entry-description-downloads-parallelism",
+            Self::DownloadsHttpKeepArchive => "settings-downloads-keep-archive-help",
+            Self::ScreenshotCopyToClipboard => "settings-entry-description-screenshot-clipboard",
+            Self::LoggingLevel | Self::LoggingFile => "settings-logging-help",
         }
     }
 }
@@ -110,6 +231,8 @@ pub enum AppSettingsChoices {
     Text(Vec<String>),
     AudioBackends(Vec<AudioBackend>),
     Renderers(Vec<RendererBackend>),
+    KeyboardBackends(Vec<InputBackendKind>),
+    GamepadBackends(Vec<GamepadBackendKind>),
 }
 
 pub fn format_app_settings_value(
@@ -174,6 +297,37 @@ pub fn format_app_settings_value(
             format!("{} FPS", config.video.frame_limit_in_background)
         }
         AppSettingsEntryId::VideoRenderer => renderer_label(&config.video.renderer, text),
+        AppSettingsEntryId::InputKeyboardBackend => {
+            keyboard_backend_label(&config.input.backend, text)
+        }
+        AppSettingsEntryId::InputGamepadBackend => {
+            gamepad_backend_label(&config.input.gamepad_backend, text)
+        }
+        AppSettingsEntryId::InputKeyboardEnabled => on_off(config.input.keyboard_enabled),
+        AppSettingsEntryId::SelectExperimentalDetailOptions => {
+            on_off(config.select.experimental_detail_options)
+        }
+        AppSettingsEntryId::SelectScrollDurationLow => {
+            format!("{} ms", config.select.scroll_duration_low_ms)
+        }
+        AppSettingsEntryId::SelectScrollDurationHigh => {
+            format!("{} ms", config.select.scroll_duration_high_ms)
+        }
+        AppSettingsEntryId::ScanFollowSymlinks => on_off(config.scan.follow_symlinks),
+        AppSettingsEntryId::ScanOnStartup => on_off(config.scan.auto_rescan_on_startup),
+        AppSettingsEntryId::TablesFetchOnStartup => on_off(config.tables.auto_fetch_on_startup),
+        AppSettingsEntryId::DownloadsIpfsEnabled => on_off(config.downloads.ipfs_enabled),
+        AppSettingsEntryId::DownloadsHttpEnabled => on_off(config.downloads.http_enabled),
+        AppSettingsEntryId::DownloadsHttpSource => config.downloads.http_source.name().to_string(),
+        AppSettingsEntryId::DownloadsHttpParallelism => {
+            config.downloads.http_parallelism.to_string()
+        }
+        AppSettingsEntryId::DownloadsHttpKeepArchive => on_off(config.downloads.http_keep_archive),
+        AppSettingsEntryId::ScreenshotCopyToClipboard => {
+            on_off(config.screenshot.copy_to_clipboard)
+        }
+        AppSettingsEntryId::LoggingLevel => log_level_label(config.logging.level).to_string(),
+        AppSettingsEntryId::LoggingFile => on_off(config.logging.file_logging),
     }
 }
 
@@ -299,6 +453,79 @@ pub fn adjust_app_settings_value(
                 cycle_value(&mut config.video.renderer, values, direction);
             }
         }
+        AppSettingsEntryId::InputKeyboardBackend => {
+            if let AppSettingsChoices::KeyboardBackends(values) = choices {
+                cycle_value(&mut config.input.backend, values, direction);
+            }
+        }
+        AppSettingsEntryId::InputGamepadBackend => {
+            if let AppSettingsChoices::GamepadBackends(values) = choices {
+                cycle_value(&mut config.input.gamepad_backend, values, direction);
+            }
+        }
+        AppSettingsEntryId::InputKeyboardEnabled => {
+            config.input.keyboard_enabled = !config.input.keyboard_enabled;
+        }
+        AppSettingsEntryId::SelectExperimentalDetailOptions => {
+            config.select.experimental_detail_options = !config.select.experimental_detail_options;
+        }
+        // Same ranges as the BMZ menu sliders.
+        AppSettingsEntryId::SelectScrollDurationLow => {
+            config.select.scroll_duration_low_ms =
+                adjust_bounded(config.select.scroll_duration_low_ms, direction, 10, 2, 1000);
+        }
+        AppSettingsEntryId::SelectScrollDurationHigh => {
+            config.select.scroll_duration_high_ms =
+                adjust_bounded(config.select.scroll_duration_high_ms, direction, 10, 1, 1000);
+        }
+        AppSettingsEntryId::ScanFollowSymlinks => {
+            config.scan.follow_symlinks = !config.scan.follow_symlinks;
+        }
+        AppSettingsEntryId::ScanOnStartup => {
+            config.scan.auto_rescan_on_startup = !config.scan.auto_rescan_on_startup;
+        }
+        AppSettingsEntryId::TablesFetchOnStartup => {
+            config.tables.auto_fetch_on_startup = !config.tables.auto_fetch_on_startup;
+        }
+        AppSettingsEntryId::DownloadsIpfsEnabled => {
+            config.downloads.ipfs_enabled = !config.downloads.ipfs_enabled;
+        }
+        AppSettingsEntryId::DownloadsHttpEnabled => {
+            config.downloads.http_enabled = !config.downloads.http_enabled;
+        }
+        AppSettingsEntryId::DownloadsHttpSource => {
+            let presets: Vec<_> = HttpDownloadPreset::ALL
+                .into_iter()
+                .filter(|preset| preset.is_available())
+                .collect();
+            let before = config.downloads.http_source;
+            cycle_value(&mut config.downloads.http_source, &presets, direction);
+            // Same as the BMZ menu: only a preset replaces the custom URL.
+            if config.downloads.http_source != before
+                && config.downloads.http_source != HttpDownloadPreset::Custom
+            {
+                config.downloads.http_api_url = config.downloads.http_source.api_url().into();
+            }
+        }
+        AppSettingsEntryId::DownloadsHttpParallelism => {
+            let value =
+                adjust_bounded(u32::from(config.downloads.http_parallelism), direction, 1, 1, 5);
+            config.downloads.http_parallelism = value as u8;
+        }
+        AppSettingsEntryId::DownloadsHttpKeepArchive => {
+            config.downloads.http_keep_archive = !config.downloads.http_keep_archive;
+        }
+        AppSettingsEntryId::ScreenshotCopyToClipboard => {
+            config.screenshot.copy_to_clipboard = !config.screenshot.copy_to_clipboard;
+        }
+        AppSettingsEntryId::LoggingLevel => cycle_value(
+            &mut config.logging.level,
+            &[LogLevel::Trace, LogLevel::Debug, LogLevel::Info, LogLevel::Warn, LogLevel::Error],
+            direction,
+        ),
+        AppSettingsEntryId::LoggingFile => {
+            config.logging.file_logging = !config.logging.file_logging;
+        }
     }
     before != format_app_settings_value(config, entry_id, AppLocale::DEFAULT)
 }
@@ -329,6 +556,44 @@ fn cycle_value<T: Clone + PartialEq>(value: &mut T, values: &[T], direction: i32
 
 fn cycle_index(current: usize, len: usize, direction: i32) -> usize {
     (current as i64 + i64::from(direction)).rem_euclid(len as i64) as usize
+}
+
+fn on_off(value: bool) -> String {
+    if value { "ON" } else { "OFF" }.to_string()
+}
+
+fn keyboard_backend_label(backend: &InputBackendKind, text: Localizer) -> String {
+    match backend {
+        InputBackendKind::Winit => "winit".to_string(),
+        InputBackendKind::LinuxEvdev => "Linux evdev (X11)".to_string(),
+        InputBackendKind::MacOsHid => "macOS IOHID".to_string(),
+        InputBackendKind::MacOsGameController => "GCKeyboard".to_string(),
+        InputBackendKind::RawInput => text.text("settings-input-raw-input"),
+        // Hid / Midi are legacy values migrated to Auto when loaded.
+        InputBackendKind::Auto | InputBackendKind::Hid | InputBackendKind::Midi => {
+            text.text("common-auto-select")
+        }
+    }
+}
+
+fn gamepad_backend_label(backend: &GamepadBackendKind, text: Localizer) -> String {
+    match backend {
+        GamepadBackendKind::Auto => text.text("common-auto-select"),
+        GamepadBackendKind::Gilrs => "gilrs".to_string(),
+        GamepadBackendKind::RawInput => text.text("settings-input-raw-input"),
+        GamepadBackendKind::GameInput => text.text("settings-input-gameinput"),
+        GamepadBackendKind::GameController => "GameController".to_string(),
+    }
+}
+
+fn log_level_label(level: LogLevel) -> &'static str {
+    match level {
+        LogLevel::Trace => "trace",
+        LogLevel::Debug => "debug",
+        LogLevel::Info => "info",
+        LogLevel::Warn => "warn",
+        LogLevel::Error => "error",
+    }
 }
 
 fn display_optional_name(value: &str, fallback: String) -> String {
@@ -478,5 +743,94 @@ mod tests {
             &AppSettingsChoices::None,
             -1,
         ));
+    }
+
+    #[test]
+    fn http_source_preset_sets_the_url_but_custom_keeps_it() {
+        let mut config = AppConfig::default();
+        config.downloads.http_source = HttpDownloadPreset::Custom;
+        config.downloads.http_api_url = "https://mine.example/{md5}".into();
+        let none = AppSettingsChoices::None;
+        assert!(adjust_app_settings_value(
+            &mut config,
+            AppSettingsEntryId::DownloadsHttpSource,
+            &none,
+            1
+        ));
+        assert_ne!(config.downloads.http_source, HttpDownloadPreset::Custom);
+        assert!(config.downloads.http_source.is_available());
+        assert_eq!(config.downloads.http_api_url, config.downloads.http_source.api_url());
+        let mut previous_url = config.downloads.http_api_url.clone();
+        while config.downloads.http_source != HttpDownloadPreset::Custom {
+            previous_url = config.downloads.http_api_url.clone();
+            adjust_app_settings_value(
+                &mut config,
+                AppSettingsEntryId::DownloadsHttpSource,
+                &none,
+                1,
+            );
+        }
+        assert_eq!(config.downloads.http_api_url, previous_url, "Custom keeps the last URL");
+    }
+
+    #[test]
+    fn new_numeric_entries_use_the_menu_ranges() {
+        let mut config = AppConfig::default();
+        let none = AppSettingsChoices::None;
+        config.downloads.http_parallelism = 5;
+        assert!(!adjust_app_settings_value(
+            &mut config,
+            AppSettingsEntryId::DownloadsHttpParallelism,
+            &none,
+            1
+        ));
+        config.select.scroll_duration_low_ms = 5;
+        assert!(adjust_app_settings_value(
+            &mut config,
+            AppSettingsEntryId::SelectScrollDurationLow,
+            &none,
+            -1
+        ));
+        assert_eq!(config.select.scroll_duration_low_ms, 2);
+        config.select.scroll_duration_high_ms = 995;
+        assert!(adjust_app_settings_value(
+            &mut config,
+            AppSettingsEntryId::SelectScrollDurationHigh,
+            &none,
+            1
+        ));
+        assert_eq!(config.select.scroll_duration_high_ms, 1000);
+    }
+
+    #[test]
+    fn backends_cycle_only_through_offered_choices() {
+        let mut config = AppConfig::default();
+        config.input.backend = InputBackendKind::Winit;
+        let choices = AppSettingsChoices::KeyboardBackends(vec![
+            InputBackendKind::Auto,
+            InputBackendKind::Winit,
+        ]);
+        assert!(adjust_app_settings_value(
+            &mut config,
+            AppSettingsEntryId::InputKeyboardBackend,
+            &choices,
+            1
+        ));
+        assert_eq!(config.input.backend, InputBackendKind::Auto);
+        // Without the list of available backends nothing changes.
+        assert!(!adjust_app_settings_value(
+            &mut config,
+            AppSettingsEntryId::InputGamepadBackend,
+            &AppSettingsChoices::None,
+            1
+        ));
+        config.logging.level = LogLevel::Error;
+        assert!(adjust_app_settings_value(
+            &mut config,
+            AppSettingsEntryId::LoggingLevel,
+            &AppSettingsChoices::None,
+            1
+        ));
+        assert_eq!(config.logging.level, LogLevel::Trace);
     }
 }

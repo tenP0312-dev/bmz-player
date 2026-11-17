@@ -13,7 +13,13 @@ pub(in crate::app) struct SelectListSource<'a> {
     pub library_db: &'a crate::storage::library_db::LibraryDatabase,
     pub score_db: &'a crate::storage::score_db::ScoreDatabase,
     pub collection_db: &'a crate::storage::collection_db::CollectionDatabase,
+    /// Lists the settings folder needs (profiles, skins, controllers), collected
+    /// on the window thread.
+    pub settings_extras: &'a crate::screens::settings_model::SettingsFolderExtras,
 }
+
+static NO_SETTINGS_EXTRAS: crate::screens::settings_model::SettingsFolderExtras =
+    crate::screens::settings_model::SettingsFolderExtras::EMPTY;
 
 impl<'a> From<&'a BootstrappedApp> for SelectListSource<'a> {
     fn from(boot: &'a BootstrappedApp) -> Self {
@@ -23,6 +29,7 @@ impl<'a> From<&'a BootstrappedApp> for SelectListSource<'a> {
             library_db: &boot.library_db,
             score_db: &boot.score_db,
             collection_db: &boot.collection_db,
+            settings_extras: &NO_SETTINGS_EXTRAS,
         }
     }
 }
@@ -118,6 +125,7 @@ pub(in crate::app) fn build_select_items_for_stack(
                 boot.profile_config.ui.locale(),
                 boot.app_config,
                 boot.profile_config,
+                boot.settings_extras,
             )
         }
         Some(path) if path == COURSE_ROOT_PATH => {

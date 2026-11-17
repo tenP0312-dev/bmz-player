@@ -235,6 +235,19 @@ fn select_snapshot_row(
             "settings-audio-apply",
             "settings-audio-apply-help",
         ),
+        SelectItem::SettingsChoice(row) => select_config_snapshot(
+            index,
+            row.label.clone(),
+            row.value_text(),
+            row.description.clone(),
+        ),
+        SelectItem::SettingsAction(row) => SelectRowSnapshot {
+            index: index as u32,
+            title: row.label.clone(),
+            subtitle: row.description.clone(),
+            kind: bmz_render::scene::SelectRowKind::SettingsFolder,
+            ..SelectRowSnapshot::default()
+        },
     }
 }
 

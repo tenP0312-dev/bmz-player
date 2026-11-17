@@ -93,6 +93,7 @@ mod select_course_builder;
 mod settings_navigation;
 mod settings_panel;
 mod skin_panel;
+pub mod soft_keyboard;
 
 use auxiliary_course::*;
 use auxiliary_debug::*;

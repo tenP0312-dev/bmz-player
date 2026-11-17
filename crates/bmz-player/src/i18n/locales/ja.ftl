@@ -1031,3 +1031,23 @@ downloads-state-validating = 書庫を確認中
 skin-external-allow = この外部スキンを許可
 skin-external-revoke = 外部スキンの許可を解除
 skin-external-allow-help = 選択したスキンと、その実体があるフォルダー内の参照を許可します。共有資源の範囲はプロファイル設定で追加できます。
+
+# 画面キーボード（コントローラーでの文字入力）
+soft-keyboard-mode-hiragana = ひらがな
+soft-keyboard-mode-katakana = カタカナ
+soft-keyboard-mode-alpha-lower = abc
+soft-keyboard-mode-alpha-upper = ABC
+soft-keyboard-mode-symbol = 記号
+soft-keyboard-mode-wide-symbol = 全角記号
+soft-keyboard-space = 空白
+soft-keyboard-wide-space = 全空白
+soft-keyboard-count = { $count } 文字
+soft-keyboard-count-max = { $count } / { $max } 文字
+soft-keyboard-notice-max-length = これ以上は入力できません
+soft-keyboard-notice-not-allowed = この欄では使えない文字です
+soft-keyboard-notice-cancel-armed = もう一度押すと、入力を破棄して閉じます
+soft-keyboard-help-scratch = 皿：カーソル左右　KEY2 / KEY4：カーソル上下
+soft-keyboard-help-keys = KEY1：入力　KEY3：゛゜小・大小　KEY5：1 文字消す　KEY6：文字種　KEY7：確定
+soft-keyboard-help-buttons = E1：空白（hold で追加の操作）　E3：前の文字種　E2 / E4：取消
+soft-keyboard-help-e1-scratch = E1 hold 中　皿：キャレット左右
+soft-keyboard-help-e1-keys = KEY5：すべて消す　KEY6：前の文字種

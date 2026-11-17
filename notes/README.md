@@ -39,6 +39,7 @@
 
 | 日付 | 記録 |
 |---|---|
+| 2026-11-17 | [コントローラーで操作する画面キーボード](2026/2026-11-17-controller-soft-keyboard.md) |
 | 2026-11-12 | [Implexroughの動画BGAが途中で止まる問題（#91）](2026/2026-11-12-implexrough-bga-decode.md) |
 | 2026-11-12 | [クイックリトライ時の動画BGA（#90）](2026/2026-11-12-bga-quick-retry.md) |
 | 2026-11-11 | [プレー終了時とResultのゲージ値不一致](2026/2026-11-11-result-gauge-settlement.md) |

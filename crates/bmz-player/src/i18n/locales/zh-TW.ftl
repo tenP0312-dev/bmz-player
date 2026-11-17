@@ -1032,3 +1032,23 @@ downloads-state-validating = 正在檢查壓縮檔
 skin-external-allow = 允許此外部佈景主題
 skin-external-revoke = 撤銷外部佈景主題權限
 skin-external-allow-help = 允許此佈景主題讀取其實際所在的資料夾。可在設定檔中新增共用資源資料夾。
+
+# 螢幕鍵盤（用控制器輸入文字）
+soft-keyboard-mode-hiragana = 平假名
+soft-keyboard-mode-katakana = 片假名
+soft-keyboard-mode-alpha-lower = abc
+soft-keyboard-mode-alpha-upper = ABC
+soft-keyboard-mode-symbol = 符號
+soft-keyboard-mode-wide-symbol = 全形符號
+soft-keyboard-space = 空格
+soft-keyboard-wide-space = 全形空格
+soft-keyboard-count = { $count } 個字元
+soft-keyboard-count-max = { $count } / { $max } 個字元
+soft-keyboard-notice-max-length = 無法再輸入更多字元
+soft-keyboard-notice-not-allowed = 此欄不能使用該字元
+soft-keyboard-notice-cancel-armed = 再按一次將捨棄輸入並關閉
+soft-keyboard-help-scratch = 轉盤：游標左右   KEY2 / KEY4：游標上下
+soft-keyboard-help-keys = KEY1：輸入   KEY3：濁音・小寫假名・大小寫   KEY5：刪除一個字元   KEY6：字元類型   KEY7：確定
+soft-keyboard-help-buttons = E1：空格（按住可進行更多操作）   E3：上一個字元類型   E2 / E4：取消
+soft-keyboard-help-e1-scratch = 按住 E1 時   轉盤：插入點左右
+soft-keyboard-help-e1-keys = KEY5：全部清除   KEY6：上一個字元類型

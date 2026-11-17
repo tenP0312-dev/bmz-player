@@ -220,25 +220,16 @@ mod tests {
     }
 
     #[test]
-    fn parse_profile_config_restores_builtin_ir_provider_slots() {
+    fn parse_profile_config_restores_the_bms_ir_provider_slot() {
         let mut profile = ProfileConfig::new_default("default", "Default", 1);
         profile.ir.providers.clear();
         let text = toml::to_string(&profile).unwrap();
 
         let loaded = parse_profile_config(&text).unwrap();
 
-        assert_eq!(loaded.ir.providers.len(), 3);
         assert_eq!(
-            loaded.ir.providers[0],
-            crate::config::profile_config::IrProviderConfig::bmz_ir()
-        );
-        assert_eq!(
-            loaded.ir.providers[1],
-            crate::config::profile_config::IrProviderConfig::rian_ir()
-        );
-        assert_eq!(
-            loaded.ir.providers[2],
-            crate::config::profile_config::IrProviderConfig::bms_ir()
+            loaded.ir.providers,
+            vec![crate::config::profile_config::IrProviderConfig::bms_ir()]
         );
     }
 

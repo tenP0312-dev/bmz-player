@@ -6,6 +6,17 @@ impl WinitApp {
         label: &'static str,
         report_up_to_date: bool,
     ) {
+        if !crate::fork_policy::ONLINE_UPDATES_ENABLED {
+            tracing::debug!(label, "update check is disabled in this build (BMS-IR fork)");
+            if report_up_to_date {
+                self.jobs.updates.prompt = Some(UpdatePrompt::Error {
+                    message: "update check is disabled in this build (BMS-IR fork)".to_string(),
+                    candidate: None,
+                });
+                self.request_redraw();
+            }
+            return;
+        }
         if !self.select_maintenance_allowed() {
             self.jobs.updates.queue_check(label, report_up_to_date);
             tracing::debug!(label, "queued update check until Select");
@@ -106,6 +117,10 @@ impl WinitApp {
     }
 
     pub(in crate::app) fn spawn_update_download(&mut self, candidate: UpdateCandidate) {
+        if !crate::fork_policy::ONLINE_UPDATES_ENABLED {
+            tracing::debug!("update download is disabled in this build (BMS-IR fork)");
+            return;
+        }
         if self.jobs.updates.pending_download.is_some() {
             tracing::debug!("update download already in progress");
             return;

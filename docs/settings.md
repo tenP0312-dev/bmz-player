@@ -316,6 +316,7 @@ Windowsでの高速なファイル探索は[Everything連携](everything.md)を�
 
 ## 連携・録画
 
+BMS-IRフォークでは、Discord Rich Presenceは停止しており、有効にしても何も送りません（[BMS-IR専用化](bmsir/BMSIR_ONLY.md)）。
 Discord Rich Presenceは、BMZ PlayerのApplication IDと画像を使います。変更できる項目は、有効にするかどうかと、曲名を表示するかどうかだけです。
 
 ## ツール

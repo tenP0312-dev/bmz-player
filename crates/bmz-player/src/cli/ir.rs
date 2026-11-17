@@ -6,7 +6,7 @@ pub(super) fn parse_ir_command(rest: &[String]) -> Result<Command> {
             let mut email = None;
             let mut password = None;
             let mut base_url = None;
-            let mut provider = "bmz-official".to_string();
+            let mut provider = "bms-ir".to_string();
             let mut iter = rest[1..].iter();
             while let Some(flag) = iter.next() {
                 match flag.as_str() {
@@ -32,7 +32,7 @@ pub(super) fn parse_ir_command(rest: &[String]) -> Result<Command> {
                     .cloned()
                     .ok_or_else(|| anyhow::anyhow!("--provider requires a value"))?,
                 Some(other) => bail!("unknown flag for ir logout: {other}"),
-                None => "bmz-official".to_string(),
+                None => "bms-ir".to_string(),
             };
             Ok(Command::Ir(IrCommand::Logout { provider }))
         }

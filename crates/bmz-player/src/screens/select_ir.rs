@@ -386,6 +386,7 @@ mod tests {
             ranking: IrRankingBody {
                 scope: IrRankingScope::Global,
                 entries: vec![IrRankingEntry {
+                    source: None,
                     rank,
                     scope_rank: None,
                     player: IrRankingPlayer {
@@ -728,6 +729,7 @@ mod tests {
                         scope: IrRankingScope::Global,
                         entries: (1..=15)
                             .map(|rank| IrCourseRankingEntry {
+                                source: None,
                                 rank,
                                 player: IrRankingPlayer {
                                     id: format!("player-{rank}"),

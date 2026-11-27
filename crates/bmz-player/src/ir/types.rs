@@ -492,6 +492,10 @@ pub struct IrCourseRankingEntry {
     pub rank: u32,
     pub player: IrRankingPlayer,
     pub score: IrCourseRankingScore,
+    /// BMS-IR only: `"new"` / `"old"` record origin. Absent for other IRs, old
+    /// servers, and players who hide the [N] / [O] marks.
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -552,6 +556,20 @@ pub struct IrRankingEntry {
     pub scope_rank: Option<u32>,
     pub player: IrRankingPlayer,
     pub score: IrRankingScore,
+    /// BMS-IR only: `"new"` / `"old"` record origin. Absent for other IRs, old
+    /// servers, and players who hide the [N] / [O] marks.
+    #[serde(default)]
+    pub source: Option<String>,
+}
+
+/// Name shown in ranking rows. Prefixes `[N] ` / `[O] ` when the server sent a
+/// known `source`; otherwise returns the name unchanged.
+pub fn ranking_display_name(name: &str, source: Option<&str>) -> String {
+    match source {
+        Some("new") => format!("[N] {name}"),
+        Some("old") => format!("[O] {name}"),
+        _ => name.to_string(),
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

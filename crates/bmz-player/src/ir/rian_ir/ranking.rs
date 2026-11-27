@@ -84,6 +84,7 @@ pub(super) fn score_ranking_entry(index: usize, resource: RianRankingResource) -
     let double_option = non_empty_attr(&attributes, "double_option")
         .or_else(|| ((packed_option / 100) % 10 == 1).then(|| "flip".to_string()));
     IrRankingEntry {
+        source: None,
         rank: index as u32 + 1,
         scope_rank: None,
         player: IrRankingPlayer { id: player_id, display_name },
@@ -150,6 +151,7 @@ pub(super) fn convert_course_ranking(
             let display_name =
                 non_empty_attr(&attributes, "display_name").unwrap_or_else(|| player_id.clone());
             IrCourseRankingEntry {
+                source: None,
                 rank: index as u32 + 1,
                 player: IrRankingPlayer { id: player_id, display_name },
                 score: IrCourseRankingScore {

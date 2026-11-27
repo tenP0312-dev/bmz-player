@@ -67,7 +67,10 @@ pub(super) fn chart_ranking_to_result_ir_ranking_with_previous(
             .iter()
             .map(|entry| ResultIrRankingEntry {
                 rank: entry.rank,
-                player_name: entry.player.display_name.clone(),
+                player_name: crate::ir::types::ranking_display_name(
+                    &entry.player.display_name,
+                    entry.source.as_deref(),
+                ),
                 ex_score: entry.score.ex_score,
                 clear: entry.score.clear.clone(),
                 bp: entry.score.min_bp,
@@ -93,7 +96,10 @@ pub(crate) fn course_ranking_to_result_ir_ranking(
             .iter()
             .map(|entry| ResultIrRankingEntry {
                 rank: entry.rank,
-                player_name: entry.player.display_name.clone(),
+                player_name: crate::ir::types::ranking_display_name(
+                    &entry.player.display_name,
+                    entry.source.as_deref(),
+                ),
                 ex_score: entry.score.ex_score,
                 clear: entry.score.clear.clone(),
                 bp: entry.score.bp,

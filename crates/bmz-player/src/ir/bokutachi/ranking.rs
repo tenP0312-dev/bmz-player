@@ -160,6 +160,7 @@ impl PersonalBest {
         let id = self.user_id.to_string();
         let display_name = usernames.get(&self.user_id).cloned().unwrap_or_else(|| id.clone());
         IrRankingEntry {
+            source: None,
             rank: self.ranking_data.rank,
             scope_rank: Some(self.ranking_data.rank),
             player: IrRankingPlayer { id, display_name },

@@ -671,6 +671,7 @@ mod tests {
             ranking: IrRankingBody {
                 scope: IrRankingScope::Global,
                 entries: vec![IrRankingEntry {
+                    source: None,
                     rank: 1,
                     scope_rank: None,
                     player: IrRankingPlayer {
@@ -721,6 +722,67 @@ mod tests {
     }
 
     #[test]
+    fn ranking_rows_show_bms_ir_source_mark_only_when_sent() {
+        let score = serde_json::json!({
+            "clear": "HARD", "ex_score": 100, "max_combo": 50, "min_bp": 1, "min_cb": 1
+        });
+        let course_score = serde_json::json!({
+            "course_score_id": "s", "clear": "HARD", "ex_score": 100, "max_combo": 50, "bp": 1
+        });
+        let rows = |score: &serde_json::Value, extra: &[(&str, &str)]| {
+            ["new-p", "old-p", "none-p"]
+                .into_iter()
+                .zip(extra.iter().map(|(_, source)| *source))
+                .map(|(name, source)| {
+                    let mut row = serde_json::json!({
+                        "rank": 1,
+                        "player": { "id": name, "display_name": name },
+                        "score": score,
+                    });
+                    if !source.is_empty() {
+                        row["source"] = source.into();
+                    }
+                    row
+                })
+                .collect::<Vec<_>>()
+        };
+        let sources = [("", "new"), ("", "old"), ("", "")];
+
+        let chart: IrRankingResult = serde_json::from_value(serde_json::json!({
+            "chart": { "sha256": "abc" },
+            "ranking": { "scope": "global", "entries": rows(&score, &sources) }
+        }))
+        .unwrap();
+        let names: Vec<_> = ranking_to_ir_snapshot(&chart)
+            .entries
+            .iter()
+            .take(3)
+            .map(|e| e.player_name.as_str().to_string())
+            .collect();
+        assert_eq!(names, ["[N] new-p", "[O] old-p", "none-p"]);
+
+        let course: IrCourseRankingResult = serde_json::from_value(serde_json::json!({
+            "course": { "course_hash": "abc" },
+            "ranking": { "scope": "global", "entries": rows(&course_score, &sources) }
+        }))
+        .unwrap();
+        let names: Vec<_> = course_ranking_to_result_ir_ranking(&course)
+            .entries
+            .iter()
+            .map(|e| e.player_name.clone())
+            .collect();
+        assert_eq!(names, ["[N] new-p", "[O] old-p", "none-p"]);
+    }
+
+    #[test]
+    fn ranking_display_name_ignores_unknown_source() {
+        use crate::ir::types::ranking_display_name;
+        assert_eq!(ranking_display_name("a", Some("other")), "a");
+        assert_eq!(ranking_display_name("a", Some("")), "a");
+        assert_eq!(ranking_display_name("a", None), "a");
+    }
+
+    #[test]
     fn course_ranking_snapshot_uses_course_score_fields() {
         let ranking = IrCourseRankingResult {
             course: IrCourseRankingCourseRef { course_hash: "ab".repeat(32) },
@@ -728,6 +790,7 @@ mod tests {
             ranking: IrCourseRankingBody {
                 scope: IrRankingScope::Global,
                 entries: vec![IrCourseRankingEntry {
+                    source: None,
                     rank: 2,
                     player: IrRankingPlayer {
                         id: "player-2".to_string(),
